@@ -1,0 +1,7 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>공동 시간외근무표</title><link rel="stylesheet" href="/style.css"></head><body>
+<header><div><p class="eyebrow">LIVE SHARED SHEET</p><h1>시간외근무 공동작성표</h1><p class="sub">입력 내용은 자동 저장되며 모든 접속자에게 실시간 반영됩니다.</p></div><div class="status"><span id="dot"></span><strong id="connection">연결 중</strong><small id="saved">저장 대기</small></div></header>
+<main>
+<section class="toolbar"><div class="summary"><div><span>작성 건수</span><strong id="count">0</strong></div><div><span>총 시간</span><strong id="total">0시간</strong></div></div><div class="actions"><button id="add" class="primary">＋ 행 추가</button><a class="button" href="/api/export.xlsx">Excel 다운로드</a><button id="print">인쇄</button></div></section>
+<section class="sheet-wrap"><table id="sheet"><thead><tr><th class="num">No.</th><th>소속</th><th>성명</th><th>근무일</th><th>시작</th><th>종료</th><th>휴게(분)</th><th>총 시간</th><th class="reason">근무 사유</th><th>비고</th><th class="delete-col">삭제</th></tr></thead><tbody></tbody></table><div id="empty">아직 작성된 내용이 없습니다.<br><button onclick="document.querySelector('#add').click()">첫 행 추가하기</button></div></section>
+<p class="hint">Tab 키로 다음 칸으로 이동할 수 있습니다. 같은 셀을 동시에 수정하면 마지막 저장 내용이 적용됩니다.</p>
+</main><script src="/socket.io/socket.io.js"></script><script src="/app.js"></script></body></html>

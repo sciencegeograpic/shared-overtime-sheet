@@ -1,0 +1,28 @@
+[
+  {
+    "id": "89f4f5ca-bfe6-4126-b35a-5bb5fbe68378",
+    "department": "",
+    "name": "",
+    "workDate": "2026-06-20",
+    "startTime": "18:00",
+    "endTime": "20:00",
+    "breakMinutes": 0,
+    "reason": "",
+    "note": "",
+    "updatedAt": "2026-06-20T14:15:22.863Z",
+    "totalMinutes": 120
+  },
+  {
+    "id": "2498b9f3-1b5d-4477-a28c-273f626f1050",
+    "department": "",
+    "name": "",
+    "workDate": "2026-06-20",
+    "startTime": "18:00",
+    "endTime": "20:00",
+    "breakMinutes": 0,
+    "reason": "",
+    "note": "",
+    "updatedAt": "2026-06-20T14:16:11.874Z",
+    "totalMinutes": 120
+  }
+]
