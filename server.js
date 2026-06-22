@@ -9,6 +9,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'app-data.json');
+const TEMPLATE_DIR = path.join(ROOT, 'templates');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const clients = new Set();
 
@@ -107,7 +108,22 @@ function weeklyPrintHtml(scope){
 </style></head><body><div class="no-print"><button onclick="window.print()">PDF로 저장/인쇄</button><span>A4 세로, 각 묶음 1쪽씩 출력됩니다.</span></div><div class="weekly-print">${page('노년사회화팀, 지역복지팀',first,1)}${page('총무팀, 영양팀, 아중노인복지관',second,2)}</div><script>setTimeout(()=>window.print(),450)</script></body></html>`;
 }
 
+
+function sendFile(res, filePath, contentType, downloadName, inline=false){
+  fs.readFile(filePath,(err,buf)=>{
+    if(err){res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});return res.end('template not found');}
+    const disposition = inline ? 'inline' : 'attachment';
+    res.writeHead(200,{
+      'Content-Type': contentType,
+      'Content-Length': buf.length,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+      'Cache-Control':'no-store'
+    });
+    res.end(buf);
+  });
+}
+
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
 function serveStatic(req,res,pathname){let file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));const fp=path.resolve(PUBLIC_DIR,file);if(!fp.startsWith(PUBLIC_DIR)){res.writeHead(403);return res.end('Forbidden')}fs.readFile(fp,(err,buf)=>{if(err){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'Content-Type':mime[path.extname(fp)]||'application/octet-stream','Cache-Control':'no-store'});res.end(buf);});}
-const server=http.createServer(async(req,res)=>{const u=new URL(req.url,`http://${req.headers.host}`);try{if(req.method==='GET'&&u.pathname==='/api/events'){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.write(`data: ${JSON.stringify({type:'data',data})}\n\n`);clients.add(res);req.on('close',()=>clients.delete(res));return;} if(req.method==='GET'&&u.pathname==='/api/data')return json(res,200,data); if(req.method==='POST'&&u.pathname==='/api/upsert'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:true,row:upsert(body.type,body.scope,body.row||{})});} if(req.method==='POST'&&u.pathname==='/api/delete'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:remove(body.type,body.scope,body.id)});} if(req.method==='GET'&&u.pathname==='/print/weekly'){const scope=u.searchParams.get('scope')||weekStartISO();const body=Buffer.from(weeklyPrintHtml(scope),'utf8');res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Length':body.length});return res.end(body);} if(req.method==='GET'&&u.pathname.startsWith('/api/export/')){const type=u.pathname.split('/').pop();const scope=u.searchParams.get('scope')||todayMonth();const mode=u.searchParams.get('mode')||'schedule';let buf,name;if(type==='overtime'){buf=mode==='confirm'?xlsxOvertimeConfirm(scope):xlsxOvertimeSchedule(scope);name=`${scope}_${mode==='confirm'?'개인시간외근무확인표':'시간외근무개인세부내역'}.xlsx`;} else if(type==='vehicle'){buf=xlsxVehicle(scope);name=`${scope}_차량운행일지.xlsx`;} else if(type==='card'){buf=xlsxCard(scope);name=`${scope}_신용체크카드사용내역.xlsx`;} else return json(res,404,{error:'unknown export'});return sendXlsx(res,sanitizeName(name),buf);} if(req.method==='GET')return serveStatic(req,res,u.pathname);json(res,405,{error:'method not allowed'});}catch(err){console.error(err);json(res,500,{error:String(err.message||err)});}});
-server.listen(PORT,'0.0.0.0',()=>console.log(`shared-worktables v7 listening on ${PORT}`));
+const server=http.createServer(async(req,res)=>{const u=new URL(req.url,`http://${req.headers.host}`);try{if(req.method==='GET'&&u.pathname==='/api/events'){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.write(`data: ${JSON.stringify({type:'data',data})}\n\n`);clients.add(res);req.on('close',()=>clients.delete(res));return;} if(req.method==='GET'&&u.pathname==='/api/data')return json(res,200,data); if(req.method==='POST'&&u.pathname==='/api/upsert'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:true,row:upsert(body.type,body.scope,body.row||{})});} if(req.method==='POST'&&u.pathname==='/api/delete'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:remove(body.type,body.scope,body.id)});} if(req.method==='GET'&&u.pathname==='/print/weekly'){const scope=u.searchParams.get('scope')||weekStartISO();if(scope==='2026-06-22')return sendFile(res,path.join(TEMPLATE_DIR,'weekly_2026-06-22.pdf'),'application/pdf',`${scope}_주간계획.pdf`,true);const body=Buffer.from(weeklyPrintHtml(scope),'utf8');res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Length':body.length});return res.end(body);} if(req.method==='GET'&&u.pathname.startsWith('/api/export/')){const type=u.pathname.split('/').pop();const scope=u.searchParams.get('scope')||todayMonth();const mode=u.searchParams.get('mode')||'schedule';let buf,name;if(type==='overtime'){if(mode==='confirm')return sendFile(res,path.join(TEMPLATE_DIR,'overtime_confirm_original.xlsx'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`${scope}_개인시간외근무확인표_원본서식.xlsx`);return sendFile(res,path.join(TEMPLATE_DIR,'overtime_schedule_original.xlsx'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`${scope}_시간외근무개인세부내역_원본서식.xlsx`);} else if(type==='vehicle'){buf=xlsxVehicle(scope);name=`${scope}_차량운행일지.xlsx`;} else if(type==='card'){buf=xlsxCard(scope);name=`${scope}_신용체크카드사용내역.xlsx`;} else return json(res,404,{error:'unknown export'});return sendXlsx(res,sanitizeName(name),buf);} if(req.method==='GET')return serveStatic(req,res,u.pathname);json(res,405,{error:'method not allowed'});}catch(err){console.error(err);json(res,500,{error:String(err.message||err)});}});
+server.listen(PORT,'0.0.0.0',()=>console.log(`shared-worktables v8 template-first listening on ${PORT}`));
