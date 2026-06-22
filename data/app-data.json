@@ -1,6 +1,7 @@
 {
-  "version": 4,
+  "version": 5,
   "overtime": {},
   "weekly": {},
-  "vehicle": {}
+  "vehicle": {},
+  "card": {}
 }

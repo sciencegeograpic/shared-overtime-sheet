@@ -9,222 +9,81 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'app-data.json');
-
 fs.mkdirSync(DATA_DIR, { recursive: true });
-
 const clients = new Set();
 
-function id() { return crypto.randomUUID(); }
-function todayMonth() { return new Date().toISOString().slice(0, 7); }
-function todayDate() { return new Date().toISOString().slice(0, 10); }
-function weekStartISO(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
-}
-function blankData() { return { version: 4, overtime: {}, weekly: {}, vehicle: {} }; }
-function minutesBetween(start, end, breakMinutes) {
-  if (!/^\d{2}:\d{2}$/.test(start || '') || !/^\d{2}:\d{2}$/.test(end || '')) return 0;
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  let s = sh * 60 + sm;
-  let e = eh * 60 + em;
-  if (e < s) e += 24 * 60;
-  return Math.max(0, e - s - (Number(breakMinutes) || 0));
-}
-function formatHours(min) {
-  const h = Math.floor((Number(min) || 0) / 60);
-  const m = (Number(min) || 0) % 60;
-  if (h && m) return `${h}시간 ${m}분`;
-  if (h) return `${h}시간`;
-  if (m) return `${m}분`;
-  return '0';
-}
-function seedWeekly() {
-  const key = '2026-06-22';
-  return {
-    [key]: [
-      row('노년사회화교육팀','노년사회화교육','DSB방송단 6월 간담회 실시(수, 11시)\n슬어생 5~6회기 실시(수,금 14시)\n덕진동치매안심마을 운영위원회의 참석(수 15시)\n선배시민 권역 간담회 참석(목, 16시)\n월드컵 단체 시청(목, 10시)\n2분기 신입회원 환영회(금, 10:30)\n사회복지현장실습 실시(금, 13:30)','문승영(덕진주민센터)\n김수희\n사랑방 / 2층 믿음방 / 3층 두란노'),
-      row('노년사회화교육팀','건강관리','인지향상프로그램(월, 14:00~15:00)\n촉탁의 방문진료(수, 13:40~)\n낙상예방 프로그램 2회차 참여자 모집','복종현, 윤숙영'),
-      row('노년사회화교육팀','작은도서관','상반기 문화시설 이용자현황 제출(시립)\n전북·전주 작은도서관 운영협의회 회비 납부','형이삭'),
-      row('지역복지팀','노인일자리','공원관리, 복지시설 사업단 활동물품 구입(주중)\n초록정원관리사 혹서기 교육 사업계획서 작성(주중)\n시니어 한끼 지원사업 참여자 만족도 조사서 제출(주중)\n국민연금 수급자 공감여행 결과 및 정산보고 제출(주중)','허혜경, 이혜수\n김효진'),
-      row('지역복지팀','사례관리 및 지역사회돌봄','노인자원봉사활성화 지원사업 6월 결과보고(주중)\n함께헤어 봉사단 무료 이미용 진행(화, 09:30~11:30)\n함께헤어 봉사단 이미용 봉사 협약식(화, 09:30)\n희망여름 착착착 준비(주중)\n사례관리 및 자원봉사자 관리(주중)','정인석'),
-      row('지역복지팀','노인복지관 연계프로그램','경로당 파견 프로그램 모니터링 및 강의일지 확인(주중)\n경로당 영양쿠킹클래스 1회기 진행(송천사랑 24일, 수, 14시)','조혜숙'),
-      row('지역복지팀','기획홍보 및 지역복지총괄','금암노인복지관 25주년 행사 참가(목, 10:00)\n선배시민 전주권역 간담회 참석(목, 16:00~)\n늘푸른합창단 개정면행정복지센터 공연(금, 9시10분~)\n복지관 홍보(주중)','중부비전센터, 카페토브\n토: 김수희, 문승영, 정인석'),
-      row('지역복지팀','기타','휴가: 김수희(화), 문승영(화, 오후), 형이삭(수)',''),
-      row('총무팀','서무·회계','6월 직원 급여 및 퇴직금 이체(6/25)\n2분기 운영위원회 관련 회계 서류 작성(~6/24)\n상반기 연차사용촉진 관련서류 작성','임미정, 최혜림'),
-      row('총무팀','시설관리','안전훈련 및 소방훈련(6/22)\n복지관 3층 복도 청소(6/26)\n사회복무요원 복무예정자 인수(6/26)\n전기 설비 정기 점검','최정환'),
-      row('영양팀','경로식당','경로당 쿠킹클래스 1회기(송천사랑, 오이피클)\n3분기 생신잔치\n조리종사자 주휴수당 및 급여기안 작성','이경님, 이기순'),
-      row('아중노인복지관','노년사회화 / 분관총괄','깨끗한 세상 소득 2차(화)\n집단상담 다시 피어나는 청춘 5회기 종결(수, 10시)\n집단상담 프로그램 포토북 제작(주중)\n분관 운영위원회 및 1차 추경예산 자료 작성(주중)\nFIFA 북중미 월드컵 대한민국 대표팀 단체 시청(목, 10시)','엄라영, 최유리'),
-      row('아중노인복지관','경로식당','조리종사자 급여 주휴수당 기안 작성\n상반기 생신잔치 실시(목)\n6.26 대체식 포장 및 제공','윤재희\n윤재희, 강정미'),
-      row('아중노인복지관','토당직 / 휴가','토당직(아중): 윤재희\n휴가: 엄라영(화, 오후 2h), 강정미(금)',''),
-      row('(노·지·총·영)','부장','운영위원회 자료 취합 및 정리(주중)\n늘푸른합창단 개정면 공연 버스지원(금 09:10)\n복지관업무 총괄(후원, 후백제교육관련준비, 실습)','개정면행정복지센터'),
-      row('(노·지·총·영)','사무국장','전주연탄은행 밥차 검사 지원(월)\n금암노인복지관 25주년 행사 참가(목, 10:00)\n3층 돌돌이 바닥청소(금, 14:00)\n지역사회 버스지원(토)\n직원 업무관리 및 사업주훈련 준비','관장, 국장, 부장, 김팀장')
-    ]
-  };
-  function row(section,business,plan,ownerPlace,note='') { return { id:id(), section,business,plan,ownerPlace,note, updatedAt:new Date().toISOString() }; }
-}
-function migrate(data) {
-  const base = blankData();
-  if (Array.isArray(data)) {
-    for (const r of data) {
-      const m = /^\d{4}-\d{2}/.test(r.workDate || '') ? r.workDate.slice(0,7) : todayMonth();
-      (base.overtime[m] ||= []).push({...r, totalMinutes: minutesBetween(r.startTime, r.endTime, r.breakMinutes)});
-    }
-    return base;
-  }
-  const out = { ...base, ...data, overtime:data.overtime||{}, weekly:data.weekly||{}, vehicle:data.vehicle||{} };
-  if (!out.weekly['2026-06-22']) out.weekly = { ...seedWeekly(), ...out.weekly };
-  return out;
-}
-function loadData() {
-  try { return migrate(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }
-  catch { const d = migrate(blankData()); saveData(d); return d; }
-}
-function saveData(data) {
-  const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, DATA_FILE);
-}
-let data = loadData();
+function id(){return crypto.randomUUID();}
+function nowISO(){return new Date().toISOString();}
+function todayMonth(){return new Date().toISOString().slice(0,7);}
+function weekStartISO(date = new Date()){const d=new Date(date);const day=d.getDay();d.setDate(d.getDate()+(day===0?-6:1-day));return d.toISOString().slice(0,10);}
+function addDaysISO(s,n){const d=new Date(s);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function ymdParts(s){const [y,m,d]=String(s||'').split('-').map(Number);return {y,m,d};}
+function monthLabel(scope){const {y,m}=ymdParts(scope+'-01'); return `${y}년 ${m}월`;}
+function monthNum(scope){return Number(scope.split('-')[1]);}
+function weekLabel(scope){const e=addDaysISO(scope,5); const a=ymdParts(scope), b=ymdParts(e); return `${a.y}년 ${a.m}월 ${a.d}일 ~ ${b.m}월 ${b.d}일`;}
+function minutesBetween(start,end,breakMinutes){if(!/^\d{2}:\d{2}$/.test(start||'')||!/^\d{2}:\d{2}$/.test(end||''))return 0; const [sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number);let s=sh*60+sm,e=eh*60+em;if(e<s)e+=1440;return Math.max(0,e-s-(Number(breakMinutes)||0));}
+function formatHours(min){min=Number(min)||0;const h=Math.floor(min/60),m=min%60; if(h&&m)return `${h}시간 ${m}분`; if(h)return `${h}시간`; if(m)return `${m}분`; return '0';}
+function htmlEscape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function sanitizeName(name){return String(name||'download').replace(/[\\/:*?"<>|]/g,'_');}
+function blankData(){return {version:5,overtime:{},weekly:{},vehicle:{},card:{}};}
+function row(section,business,plan,ownerPlace,note=''){return {id:id(),section,business,plan,ownerPlace,note,updatedAt:nowISO()};}
+function seedWeekly(){const key='2026-06-22';return {[key]:[
+row('노년사회화교육팀','노년사회화 교육','- DSB방송단 6월 간담회 실시(수, 11시)\n- 슬어생 5~6회기 실시(수,금 14시)\n- 덕진동치매안심마을 운영위원회의참석(수 15시)\n- 선배시민 권역 간담회 참석(목, 16시)\n- 월드컵 단체 시청(목, 10시)\n- 2분기 신입회원 환영회(금, 10:30)\n- 사회복지현장실습 실시(금, 13:30)','- 노년사회화\n- 문승영(덕진주민센터)\n- 김수희\n- 사랑방\n- 2층 믿음방\n- 3층 두란노'),
+row('노년사회화교육팀','건강관리','- 인지향상프로그램(월, 14:00~15:00)\n- 촉탁의 방문진료(수, 13:40~)\n- 낙상예방 프로그램 2회차 참여자 모집','- 복종현,윤숙영'),
+row('노년사회화교육팀','작은도서관','- 상반기 문화시설 이용자현황 제출(시립)\n- 전북·전주 작은도서관 운영협의회 회비 납부','- 형이삭'),
+row('지역복지팀','노인일자리','- 공원관리, 복지시설 사업단 활동물품 구입(주중)\n- 초록정원관리사 혹서기 교육 사업계획서 작성(주중)\n- 시니어 한끼 지원사업 참여자 만족도 조사서 제출(주중)\n- 국민연금 수급자 공감여행 결과 및 정산보고 제출(주중)','- 노인일자리\n- 허혜경, 이혜수\n- 김효진'),
+row('지역복지팀','사례관리 및 지역사회돌봄','- 노인자원봉사활성화 지원사업 6월 결과보고(주중)\n- 함께헤어 봉사단 무료 이미용 진행(화, 09:30~11:30)\n- 함께헤어 봉사단 이미용 봉사 협약식(화, 09:30)\n- 희망여름 착착착 준비(주중)\n- 사례관리 및 자원봉사자 관리(주중)','- 정인석'),
+row('지역복지팀','노인복지관 연계프로그램','- 경로당 파견 프로그램모니터링 및 강의일지 확인(주중)\n- 경로당 영양쿠킹클래스 1회기 진행\n  (송천사랑 24일, 수, 14시)','- 조혜숙'),
+row('지역복지팀','기획홍보 및 지역복지총괄','- 금암노인복지관 25주년 행사 참가(목, 10:00)\n- 선배시민 전주권역 간담회 참석(목, 16:00~)\n- 늘푸른합창단 개정면행정복지센터 공연(금, 9시10분~)\n- 복지관홍보(주중)','- 중부비전센터,카페토브\n토\n- 김수희, 문승영, 정인석'),
+row('지역복지팀','기타','- 휴가: 김수희(화), 문승영(화,오후), 형이삭(수)',''),
+row('총무팀','서무·회계','- 6월 직원 급여 및 퇴직금 이체(6/25)\n- 2분기 운영위원회 관련 회계 서류 작성(~6/24)\n- 상반기 연차사용촉진 관련서류 작성','- 임미정, 최혜림'),
+row('총무팀','시설관리','- 안전훈련 및 소방훈련(6/22)\n- 복지관 3층 복도 청소(6/26)\n- 사회복무요원 복무예정자 인수(6/26)\n- 전기 설비 정기 점검','- 최정환'),
+row('영양팀','경로식당','- 경로당 쿠킹클래스 1회기 (송천사랑,오이피클)\n- 3분기 생신잔치\n- 조리종사자 주휴수당 및 급여기안작성','- 이경님,이기순'),
+row('아중노인복지관','노년사회화 분관총괄','- 깨끗한 세상 소득 2차(화)\n- 집단상담 다시 피어나는 청춘 5회기 종결(수, 10시)\n- 집단상담 프로그램 포토북 제작(주중)\n- 분관 운영위원회 및 1차 추경예산 자료 작성(주중)\n- FIFA 북중미 월드컵 대한민국 대표팀 단체 시청(목, 10시)','- 엄라영 최유리'),
+row('아중노인복지관','경로식당','- 조리종사자 급여 주휴수당 기안작성\n- 상반기 생신잔치 실시(목)\n- 6.26 대체식 포장 및 제공','- 윤재희\n- 윤재희, 강정미\n- 윤재희, 강정미'),
+row('아중노인복지관','토당직(아중)','- 윤재희',''),
+row('아중노인복지관','휴가','- 엄라영(화, 오후 2h), 강정미(금)',''),
+row('(노·지·총·영)','부장','- 운영위원회 자료 취합 및 정리(주중)\n- 늘푸른합창단 개정면 공연 버스지원(금 09:10)\n- 복지관업무 총괄(후원,후백제교육관련준비,실습)','- 개정면행정복지센터'),
+row('(노·지·총·영)','사무국장','- 전주연탄은행 밥차 검사 지원(월)\n- 금암노인복지관 25주년 행사 참가(목, 10:00)\n- 3층 돌돌이 바닥청소(금. 14:00)\n- 지역사회 버스지원(토)\n- 직원 업무관리 및 사업주훈련 준비','- 국장\n- 관장,국장,부장,김팀장\n- 국장\n- 국장\n- 국장')
+]};}
+function migrate(input){const base=blankData(); if(Array.isArray(input)){for(const r of input){const m=/^\d{4}-\d{2}/.test(r.workDate||'')?r.workDate.slice(0,7):todayMonth();(base.overtime[m]||=[]).push({...r,totalMinutes:minutesBetween(r.startTime,r.endTime,r.breakMinutes)});}return base;} const out={...base,...input,overtime:input?.overtime||{},weekly:input?.weekly||{},vehicle:input?.vehicle||{},card:input?.card||{}}; if(!out.weekly['2026-06-22']) out.weekly={...seedWeekly(),...out.weekly}; return out;}
+function loadData(){try{return migrate(JSON.parse(fs.readFileSync(DATA_FILE,'utf8')))}catch{const d=migrate(blankData());saveData(d);return d;}}
+function saveData(d){fs.mkdirSync(DATA_DIR,{recursive:true});const tmp=DATA_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(d,null,2));fs.renameSync(tmp,DATA_FILE);}
+let data=loadData();
+function sortData(){for(const rows of Object.values(data.overtime||{}))rows.sort((a,b)=>String(a.workDate||'').localeCompare(String(b.workDate||''))||String(a.startTime||'').localeCompare(String(b.startTime||''))||String(a.name||'').localeCompare(String(b.name||'')));for(const rows of Object.values(data.vehicle||{}))rows.sort((a,b)=>String(a.useDate||'').localeCompare(String(b.useDate||''))||String(a.departTime||'').localeCompare(String(b.departTime||'')));for(const rows of Object.values(data.card||{}))rows.sort((a,b)=>String(a.useDate||'').localeCompare(String(b.useDate||''))||String(a.fund||'').localeCompare(String(b.fund||'')));}
+function broadcast(){sortData();const payload=`data: ${JSON.stringify({type:'data',data})}\n\n`;for(const res of clients){try{res.write(payload)}catch{}}}
+function json(res,status,obj){const body=JSON.stringify(obj);res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Content-Length':Buffer.byteLength(body)});res.end(body);}
+function readBody(req){return new Promise((resolve,reject)=>{let b='';req.on('data',d=>{b+=d;if(b.length>2e6){req.destroy();reject(new Error('too large'));}});req.on('end',()=>resolve(b));req.on('error',reject);});}
+function ensureRows(type,scope){if(!data[type])data[type]={};if(!data[type][scope])data[type][scope]=[];return data[type][scope];}
+function upsert(type,scope,row){if(!data[type])data[type]={}; if(!data[type][scope])data[type][scope]=[]; const rows=data[type][scope]; if(!row.id)row.id=id(); row.updatedAt=nowISO(); if(type==='overtime')row.totalMinutes=minutesBetween(row.startTime,row.endTime,row.breakMinutes); if(type==='vehicle')row.distance=Math.max(0,(Number(row.endKm)||0)-(Number(row.startKm)||0)); if(type==='card')row.amount=Number(row.amount)||0; const idx=rows.findIndex(r=>r.id===row.id); if(idx>=0)rows[idx]={...rows[idx],...row}; else rows.push(row); sortData(); saveData(data); broadcast(); return row;}
+function remove(type,scope,idval){if(!data[type]?.[scope])return false;data[type][scope]=data[type][scope].filter(r=>r.id!==idval);saveData(data);broadcast();return true;}
 
-function sortData() {
-  for (const rows of Object.values(data.overtime)) rows.sort((a,b)=>String(a.workDate||'').localeCompare(String(b.workDate||'')) || String(a.startTime||'').localeCompare(String(b.startTime||'')) || String(a.name||'').localeCompare(String(b.name||'')));
-  for (const rows of Object.values(data.vehicle)) rows.sort((a,b)=>String(a.useDate||'').localeCompare(String(b.useDate||'')) || String(a.departTime||'').localeCompare(String(b.departTime||'')));
-}
-function broadcast() {
-  sortData();
-  const payload = `data: ${JSON.stringify({ type:'data', data })}\n\n`;
-  for (const res of clients) { try { res.write(payload); } catch {} }
-}
-function json(res, status, obj) {
-  const body = JSON.stringify(obj);
-  res.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Content-Length':Buffer.byteLength(body) });
-  res.end(body);
-}
-function htmlEscape(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function readBody(req) { return new Promise((resolve,reject)=>{ let b=''; req.on('data',d=>{ b+=d; if (b.length>1e6) { req.destroy(); reject(new Error('too large')); } }); req.on('end',()=>resolve(b)); req.on('error',reject); }); }
-function sanitizeName(name) { return String(name || 'download').replace(/[\\/:*?"<>|]/g, '_'); }
+// --- Minimal OOXML .xlsx writer (no dependencies) ---
+function crc32(buf){let table=crc32.table;if(!table){table=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=((c&1)?(0xEDB88320^(c>>>1)):(c>>>1));table[n]=c>>>0;}crc32.table=table;}let crc=0^(-1);for(let i=0;i<buf.length;i++)crc=(crc>>>8)^table[(crc^buf[i])&0xff];return (crc^(-1))>>>0;}
+function dosDateTime(d=new Date()){let dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();let tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);return {dt,tm};}
+function zipStore(files){let chunks=[],central=[],offset=0;const dd=dosDateTime();for(const f of files){const nameBuf=Buffer.from(f.name,'utf8'),dataBuf=Buffer.isBuffer(f.data)?f.data:Buffer.from(f.data,'utf8'),crc=crc32(dataBuf);const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0x0800,6);local.writeUInt16LE(0,8);local.writeUInt16LE(dd.tm,10);local.writeUInt16LE(dd.dt,12);local.writeUInt32LE(crc,14);local.writeUInt32LE(dataBuf.length,18);local.writeUInt32LE(dataBuf.length,22);local.writeUInt16LE(nameBuf.length,26);local.writeUInt16LE(0,28);chunks.push(local,nameBuf,dataBuf);const c=Buffer.alloc(46);c.writeUInt32LE(0x02014b50,0);c.writeUInt16LE(20,4);c.writeUInt16LE(20,6);c.writeUInt16LE(0x0800,8);c.writeUInt16LE(0,10);c.writeUInt16LE(dd.tm,12);c.writeUInt16LE(dd.dt,14);c.writeUInt32LE(crc,16);c.writeUInt32LE(dataBuf.length,20);c.writeUInt32LE(dataBuf.length,24);c.writeUInt16LE(nameBuf.length,28);c.writeUInt16LE(0,30);c.writeUInt16LE(0,32);c.writeUInt16LE(0,34);c.writeUInt16LE(0,36);c.writeUInt32LE(0,38);c.writeUInt32LE(offset,42);central.push(c,nameBuf);offset+=local.length+nameBuf.length+dataBuf.length;}const centralStart=offset;const centralBuf=Buffer.concat(central);const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(0,4);end.writeUInt16LE(0,6);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(centralBuf.length,12);end.writeUInt32LE(centralStart,16);end.writeUInt16LE(0,20);return Buffer.concat([...chunks,centralBuf,end]);}
+function xe(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));}
+function colName(n){let s=''; while(n>0){let m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;}
+function cellXml(c,r,cell){if(cell==null||cell.v==null||cell.v==='')return '';let ref=colName(c)+r;let s=cell.s?` s="${cell.s}"`:''; if(typeof cell.v==='number'&&!cell.t){return `<c r="${ref}"${s}><v>${cell.v}</v></c>`;} return `<c r="${ref}" t="inlineStr"${s}><is><t xml:space="preserve">${xe(cell.v)}</t></is></c>`;}
+function sheetXml(sheet){const maxR=sheet.rows.length,maxC=Math.max(...sheet.rows.map(r=>r.length),1);let cols=''; if(sheet.cols){cols='<cols>'+sheet.cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>';}let rows=sheet.rows.map((row,ri)=>{const r=ri+1;let ht=sheet.heights?.[ri]?` ht="${sheet.heights[ri]}" customHeight="1"`:'';let cells=row.map((c,i)=>cellXml(i+1,r,c)).join('');return `<row r="${r}"${ht}>${cells}</row>`;}).join('');let merges=sheet.merges?.length?`<mergeCells count="${sheet.merges.length}">${sheet.merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:'';let page=`<pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.1" footer="0.1"/><pageSetup paperSize="9" orientation="${sheet.orientation||'portrait'}" fitToWidth="1" fitToHeight="0"/><printOptions horizontalCentered="1"/>`;return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${colName(maxC)}${maxR}"/><sheetViews><sheetView workbookViewId="0"/></sheetViews>${cols}<sheetData>${rows}</sheetData>${merges}${page}</worksheet>`;}
+function stylesXml(){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="6"><font><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="16"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font><font><b/><color rgb="FFFF0000"/><sz val="10"/><name val="맑은 고딕"/></font><font><color rgb="FF0070C0"/><b/><sz val="10"/><name val="맑은 고딕"/></font></fonts><fills count="8"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF2F8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="13"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf fontId="2" fillId="0" borderId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1"/></xf><xf fontId="1" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf fontId="1" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="4" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="5" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="5" borderId="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf fontId="3" fillId="6" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="7" borderId="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;}
+function workbookXml(sheets){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><workbookPr/><sheets>${sheets.map((s,i)=>`<sheet name="${xe(s.name).slice(0,31)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`;}
+function workbookRels(sheets){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;}
+function contentTypes(sheets){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;}
+function makeXlsx(sheets){const files=[{name:'[Content_Types].xml',data:contentTypes(sheets)},{name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},{name:'xl/workbook.xml',data:workbookXml(sheets)},{name:'xl/_rels/workbook.xml.rels',data:workbookRels(sheets)},{name:'xl/styles.xml',data:stylesXml()},...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:sheetXml(s)}))];return zipStore(files);}
+function blankCell(s=3){return {v:'',s};}
+function c(v,s=0){return {v,s};}
+function sendXlsx(res,filename,buffer){res.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,'Content-Length':buffer.length});res.end(buffer);}
+function approvalRows(five=true){if(five){return [[c('결재',3),c('담당',2),c('팀장',2),c('부장',2),c('국장',2),c('관장',2)],[blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell()]];}return [[c('결재',3),c('담 당',2),c('부 장',2)],[blankCell(),blankCell(),blankCell()]];}
+function xlsxOvertimeSchedule(scope){const rows=ensureRows('overtime',scope);const {y,m}=ymdParts(scope+'-01');const first=new Date(y,m-1,1);const last=new Date(y,m,0).getDate();const startDay=first.getDay();const weeks=[];let day=1-startDay;while(day<=last){const week=[];for(let dow=0;dow<7;dow++){week.push(day>=1&&day<=last?day:null);day++;}weeks.push(week);}const byDate={};for(const r of rows){(byDate[r.workDate]||=[]).push(`${r.name||''}${r.totalMinutes?`(${Math.round(r.totalMinutes/60*10)/10})`:''}`);}const out=[];const merges=['A2:G2'];out.push([c('',0),c('',0),c('',0),c('',0),c('',0),c('',0),c('',0)]);out.push([c(`${y}년 ${m}월 시간외근무 개인세부내역`,1),blankCell(0),blankCell(0),blankCell(0),blankCell(0),blankCell(0),blankCell(0)]);out.push([c('',0),c('',0),c('',0),c('',0),c('',0),c('',0),c('덕진노인복지관',9)]);out.push(['일','월','화','수','목','금','토'].map(v=>c(v,2)));for(const w of weeks){const rIdx=out.length+1;out.push(w.map((d,i)=>d?c(`${m}/${d}`,i===0?7:i===6?8:6):c('',6)));for(let k=0;k<7;k++){out.push(w.map(d=>{if(!d)return c('',3);const list=byDate[`${scope}-${String(d).padStart(2,'0')}`]||[];return c(list[k]||'',3);}));}}
+return makeXlsx([{name:`${m}월`,cols:[16,16,16,16,16,16,16],heights:out.map((_,i)=>i===1?26:(i>=4&&out[i][0]?.s===6?23:28)),merges,orientation:'landscape',rows:out}]);}
+function xlsxOvertimeConfirm(scope){const rows=ensureRows('overtime',scope);const people={};for(const r of rows){const name=r.name||'미입력';if(!people[name])people[name]={department:r.department||'',name,items:[]};const md=r.workDate?`${Number(r.workDate.slice(5,7))}/${Number(r.workDate.slice(8,10))}`:'';people[name].items.push(`${md}(${Math.round((Number(r.totalMinutes)||0)/60*10)/10})`);}const list=Object.values(people).sort((a,b)=>a.name.localeCompare(b.name,'ko'));const m=monthNum(scope);const title=`${m}월 시간외근무 확인표`;const out=[];const merges=['A1:D1','E1:I1'];out.push([c(title,1),blankCell(),blankCell(),blankCell(),c(`1) 작성 및 제출은 익월 5일 이전까지\n2) 근무시간은 앞뒤로 정시기준 5분정도만 차이나게 작성해주세요.`,5),blankCell(),blankCell(),blankCell(),blankCell()]);out.push(['연번','근무처','직위','성명','완료여부','날짜 및 근무시간','근무상황부 제출여부','명령서 제출여부','시간외근무확인대장 작성여부'].map(v=>c(v,2)));list.forEach((p,i)=>out.push([c(i+1,3),c(i===0?'본관':'',3),c('',3),c(p.name,3),c('완료',3),c(p.items.join(', '),4),c('',3),c('',3),c('',3)]));while(out.length<18)out.push(Array(9).fill(0).map(()=>blankCell(3)));return makeXlsx([{name:`${m}월`,cols:[7,10,12,12,11,30,17,15,22],heights:out.map((_,i)=>i===0?38:22),merges,orientation:'landscape',rows:out}]);}
+function xlsxVehicle(scope){const rows=ensureRows('vehicle',scope);const out=[];const merges=['A1:L1','H2:L3'];out.push([c('차 량 운 행 일 지',1),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),c('결재',3),c('담당',2),c('팀장',2),c('부장',2),c('관장',2)]);out.push([c(scope,9),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell()]);out.push(['순번','사용일','차량','운전자','행선지','사용목적','출발','복귀','출발km','도착km','운행km','비고'].map(v=>c(v,2)));rows.forEach((r,i)=>out.push([c(i+1,3),c(r.useDate,3),c(r.car,3),c(r.driver,3),c(r.destination,4),c(r.purpose,4),c(r.departTime,3),c(r.returnTime,3),c(Number(r.startKm)||'',3),c(Number(r.endKm)||'',3),c(Number(r.distance)||'',3),c(r.note,4)]));while(out.length<25)out.push(Array(12).fill(0).map(()=>blankCell(3)));return makeXlsx([{name:'차량일지',cols:[6,12,12,12,18,22,10,10,10,10,10,20],heights:out.map((_,i)=>i===0?30:24),merges,orientation:'landscape',rows:out}]);}
+function xlsxCard(scope){const rows=ensureRows('card',scope);const out=[];const merges=['A1:J1','G2:J3'];out.push([c(`${monthLabel(scope)} 신용·체크카드 사용내역`,1),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),c('결재',3),c('담당',2),c('부장',2),c('관장',2)]);out.push([c('구분: 보조금 / 자부담 / 후원금',9),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell()]);out.push(['순번','사용일','구분','카드명','사용처','사용내역','금액','계정과목','증빙','비고'].map(v=>c(v,2)));rows.forEach((r,i)=>out.push([c(i+1,3),c(r.useDate,3),c(r.fund,3),c(r.cardName,3),c(r.vendor,4),c(r.description,4),c(Number(r.amount)||0,10),c(r.account,3),c(r.proof,3),c(r.note,4)]));const sum=rows.reduce((s,r)=>s+(Number(r.amount)||0),0);out.push([c('',0),c('',0),c('',0),c('',0),c('',0),c('합계',11),c(sum,10),c('',0),c('',0),c('',0)]);while(out.length<25)out.push(Array(10).fill(0).map(()=>blankCell(3)));return makeXlsx([{name:'카드사용내역',cols:[6,12,12,15,20,28,14,15,12,20],heights:out.map((_,i)=>i===0?30:24),merges,orientation:'portrait',rows:out}]);}
 
-function upsert(type, scope, row) {
-  if (!data[type]) data[type] = {};
-  if (!data[type][scope]) data[type][scope] = [];
-  const rows = data[type][scope];
-  if (!row.id) row.id = id();
-  row.updatedAt = new Date().toISOString();
-  if (type === 'overtime') row.totalMinutes = minutesBetween(row.startTime, row.endTime, row.breakMinutes);
-  if (type === 'vehicle') row.distance = Math.max(0, (Number(row.endKm)||0) - (Number(row.startKm)||0));
-  const idx = rows.findIndex(r => r.id === row.id);
-  if (idx >= 0) rows[idx] = { ...rows[idx], ...row }; else rows.push(row);
-  sortData(); saveData(data); broadcast();
-  return row;
-}
-function remove(type, scope, idval) {
-  if (!data[type]?.[scope]) return false;
-  data[type][scope] = data[type][scope].filter(r => r.id !== idval);
-  saveData(data); broadcast();
-  return true;
-}
-function ensureRows(type, scope) {
-  if (!data[type]) data[type] = {};
-  if (!data[type][scope]) data[type][scope] = [];
-  return data[type][scope];
-}
+function weeklyPrintHtml(scope){const rows=ensureRows('weekly',scope);const left=rows.filter(r=>!['총무팀','영양팀','아중노인복지관','(노·지·총·영)'].includes(r.section));const right=rows.filter(r=>['총무팀','영양팀','아중노인복지관','(노·지·총·영)'].includes(r.section));function approval(){return '<table class="wk-approval"><tr><th rowspan="2">결<br>재</th><th>담 당</th><th>부 장</th></tr><tr><td></td><td></td></tr></table>';}function tbl(titleRows){return `<table class="wk-table"><thead><tr><th>구분</th><th>사 업</th><th>업 무 계 획</th><th>담당자 및 장소</th></tr></thead><tbody>${titleRows.map(r=>`<tr><td class="group">${htmlEscape(r.section)}</td><td>${htmlEscape(r.business)}</td><td>${htmlEscape(r.plan)}</td><td>${htmlEscape(r.ownerPlace)}</td></tr>`).join('')}</tbody></table>`;}function page(title,arr){return `<section class="weekly-sheet"><div class="wk-head"><h1>주&nbsp;&nbsp;간&nbsp;&nbsp;계&nbsp;&nbsp;획</h1>${approval()}</div><div class="wk-sub"><span>${htmlEscape(title)}</span><span>${htmlEscape(weekLabel(scope))}</span></div>${tbl(arr)}</section>`;}return `<!doctype html><html><head><meta charset="utf-8"><title>${htmlEscape(scope)} 주간계획 PDF</title><style>@page{size:A4 landscape;margin:8mm}body{margin:0;font-family:'Malgun Gothic','맑은 고딕',serif;color:#000}.no-print{position:fixed;top:10px;left:10px;z-index:5}button{font-size:14px;padding:8px 12px}.weekly-print{display:flex;gap:10mm;align-items:flex-start}.weekly-sheet{width:calc(50% - 5mm);font-size:8.1pt}.wk-head{position:relative;height:28mm}.wk-head h1{text-align:center;letter-spacing:8px;font-size:17pt;margin:12mm 0 0}.wk-approval{position:absolute;right:0;top:0;border-collapse:collapse}.wk-approval th,.wk-approval td{border:1px solid #000;width:13mm;text-align:center;height:8mm;font-size:8pt}.wk-approval td{height:17mm}.wk-sub{display:flex;justify-content:space-between;font-size:8pt;margin:0 0 2mm}.wk-table{width:100%;border-collapse:collapse;table-layout:fixed}.wk-table th,.wk-table td{border:1px solid #000;white-space:pre-wrap;word-break:keep-all;padding:2mm 1.2mm;vertical-align:middle;line-height:1.35}.wk-table th{text-align:center;font-size:9pt}.wk-table th:nth-child(1){width:8%}.wk-table th:nth-child(2){width:12%}.wk-table th:nth-child(3){width:60%}.wk-table th:nth-child(4){width:20%}.group{text-align:center;font-weight:700;writing-mode:vertical-rl;letter-spacing:2px}@media print{.no-print{display:none}.weekly-print{gap:8mm}}</style></head><body><div class="no-print"><button onclick="window.print()">PDF로 저장/인쇄</button></div><div class="weekly-print">${page('노년사회화팀, 지역복지팀',left)}${page('총무팀, 영양팀, 아중노인복지관',right)}</div><script>setTimeout(()=>window.print(),350)</script></body></html>`;}
 
-function approvalHtml() {
-  return `<table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table>`;
-}
-function xlsDoc(title, subtitle, tableHtml, extra='') {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-  body{font-family:'Malgun Gothic','맑은 고딕',Arial,sans-serif;font-size:10pt;color:#111} h1{text-align:center;font-size:18pt;letter-spacing:6px;margin:8px 0 4px} .subtitle{text-align:center;font-size:11pt;margin-bottom:8px}.top{display:flex;justify-content:flex-end}.approval{border-collapse:collapse;margin-left:auto;margin-bottom:8px}.approval th,.approval td{border:1px solid #000;width:58px;height:28px;text-align:center;font-size:9pt}.approval td{height:44px}.sheet{border-collapse:collapse;width:100%;table-layout:fixed}.sheet th,.sheet td{border:1px solid #000;padding:4px;vertical-align:middle;white-space:pre-wrap;mso-number-format:'\\@';}.sheet th{text-align:center;background:#f2f2f2;font-weight:bold}.center{text-align:center}.stamp{margin-left:auto;margin-top:16px;border:1px solid #000;width:150px;height:58px;text-align:center;line-height:58px;font-weight:bold}
-  </style></head><body>${approvalHtml()}<h1>${htmlEscape(title)}</h1><div class="subtitle">${htmlEscape(subtitle)}</div>${tableHtml}${extra}<div class="stamp">직인</div></body></html>`;
-}
-function sendXls(res, filename, html) {
-  const body = Buffer.from('\ufeff' + html, 'utf8');
-  res.writeHead(200, { 'Content-Type':'application/vnd.ms-excel; charset=utf-8', 'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(filename)}`, 'Content-Length':body.length });
-  res.end(body);
-}
-function overtimeXls(scope, mode) {
-  const rows = ensureRows('overtime', scope);
-  const title = mode === 'confirm' ? '개인시간외근무확인표' : '시간외근무 개인 일정표';
-  const head = mode === 'confirm'
-    ? '<tr><th style="width:48px">순번</th><th>소속</th><th>성명</th><th>근무일</th><th>근무시간</th><th>인정시간</th><th>근무내용</th><th>확인</th></tr>'
-    : '<tr><th style="width:48px">순번</th><th>소속</th><th>성명</th><th>근무일</th><th>시작</th><th>종료</th><th>휴게</th><th>인정시간</th><th>근무 사유</th><th>비고</th></tr>';
-  const body = rows.map((r,i)=> mode === 'confirm'
-    ? `<tr><td class="center">${i+1}</td><td>${htmlEscape(r.department)}</td><td>${htmlEscape(r.name)}</td><td class="center">${htmlEscape(r.workDate)}</td><td class="center">${htmlEscape(r.startTime)}~${htmlEscape(r.endTime)}</td><td class="center">${htmlEscape(formatHours(r.totalMinutes))}</td><td>${htmlEscape(r.reason)}</td><td></td></tr>`
-    : `<tr><td class="center">${i+1}</td><td>${htmlEscape(r.department)}</td><td>${htmlEscape(r.name)}</td><td class="center">${htmlEscape(r.workDate)}</td><td class="center">${htmlEscape(r.startTime)}</td><td class="center">${htmlEscape(r.endTime)}</td><td class="center">${htmlEscape(r.breakMinutes||0)}분</td><td class="center">${htmlEscape(formatHours(r.totalMinutes))}</td><td>${htmlEscape(r.reason)}</td><td>${htmlEscape(r.note)}</td></tr>`).join('');
-  const total = rows.reduce((s,r)=>s+(Number(r.totalMinutes)||0),0);
-  return xlsDoc(title, `${scope} / 총 ${formatHours(total)}`, `<table class="sheet">${head}${body}</table>`, `<p>총 인정시간: ${formatHours(total)}</p>`);
-}
-function weeklyXls(scope) {
-  const rows = ensureRows('weekly', scope);
-  const body = rows.map((r,i)=>`<tr><td class="center">${i+1}</td><td>${htmlEscape(r.section)}</td><td>${htmlEscape(r.business)}</td><td>${htmlEscape(r.plan)}</td><td>${htmlEscape(r.ownerPlace)}</td><td>${htmlEscape(r.note)}</td></tr>`).join('');
-  return xlsDoc('주 간 계 획', `${scope} 주간`, `<table class="sheet"><tr><th style="width:45px">순번</th><th style="width:120px">구분</th><th style="width:120px">사업</th><th>업무계획</th><th style="width:160px">담당자 및 장소</th><th style="width:100px">비고</th></tr>${body}</table>`);
-}
-function vehicleXls(scope) {
-  const rows = ensureRows('vehicle', scope);
-  const body = rows.map((r,i)=>`<tr><td class="center">${i+1}</td><td class="center">${htmlEscape(r.useDate)}</td><td>${htmlEscape(r.car)}</td><td>${htmlEscape(r.driver)}</td><td>${htmlEscape(r.destination)}</td><td>${htmlEscape(r.purpose)}</td><td class="center">${htmlEscape(r.departTime)}</td><td class="center">${htmlEscape(r.returnTime)}</td><td class="center">${htmlEscape(r.startKm)}</td><td class="center">${htmlEscape(r.endKm)}</td><td class="center">${htmlEscape(r.distance)}</td><td class="center">${htmlEscape(r.fuel)}</td><td>${htmlEscape(r.note)}</td></tr>`).join('');
-  return xlsDoc('차 량 운 행 일 지', `${scope}`, `<table class="sheet"><tr><th>순번</th><th>사용일</th><th>차량</th><th>운전자</th><th>행선지</th><th>사용목적</th><th>출발</th><th>복귀</th><th>출발km</th><th>도착km</th><th>운행km</th><th>주유량</th><th>비고</th></tr>${body}</table>`);
-}
-
-const mime = { '.html':'text/html; charset=utf-8', '.js':'application/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.ico':'image/x-icon' };
-function serveStatic(req, res, pathname) {
-  let file = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1));
-  const fp = path.resolve(PUBLIC_DIR, file);
-  if (!fp.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('Forbidden'); }
-  fs.readFile(fp, (err, buf) => {
-    if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': mime[path.extname(fp)] || 'application/octet-stream', 'Cache-Control':'no-store' });
-    res.end(buf);
-  });
-}
-
-const server = http.createServer(async (req, res) => {
-  const u = new URL(req.url, `http://${req.headers.host}`);
-  try {
-    if (req.method === 'GET' && u.pathname === '/api/events') {
-      res.writeHead(200, { 'Content-Type':'text/event-stream; charset=utf-8', 'Cache-Control':'no-cache, no-transform', 'Connection':'keep-alive', 'X-Accel-Buffering':'no' });
-      res.write(`data: ${JSON.stringify({ type:'data', data })}\n\n`);
-      clients.add(res);
-      req.on('close', () => clients.delete(res));
-      return;
-    }
-    if (req.method === 'GET' && u.pathname === '/api/data') return json(res, 200, data);
-    if (req.method === 'POST' && u.pathname === '/api/upsert') {
-      const body = JSON.parse(await readBody(req) || '{}');
-      const result = upsert(body.type, body.scope, body.row || {});
-      return json(res, 200, { ok:true, row:result });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/delete') {
-      const body = JSON.parse(await readBody(req) || '{}');
-      const ok = remove(body.type, body.scope, body.id);
-      return json(res, 200, { ok });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/reset-scope') {
-      const body = JSON.parse(await readBody(req) || '{}');
-      if (data[body.type]) data[body.type][body.scope] = [];
-      saveData(data); broadcast();
-      return json(res, 200, { ok:true });
-    }
-    if (req.method === 'GET' && u.pathname.startsWith('/api/export/')) {
-      const type = u.pathname.split('/').pop();
-      const scope = u.searchParams.get('scope') || todayMonth();
-      const mode = u.searchParams.get('mode') || 'schedule';
-      let html = '', name = '';
-      if (type === 'overtime') { html = overtimeXls(scope, mode); name = `${scope}_${mode === 'confirm' ? '개인시간외근무확인표' : '시간외근무개인일정표'}.xls`; }
-      else if (type === 'weekly') { html = weeklyXls(scope); name = `${scope}_주간계획.xls`; }
-      else if (type === 'vehicle') { html = vehicleXls(scope); name = `${scope}_차량운행일지.xls`; }
-      else return json(res, 404, { error:'unknown export type' });
-      return sendXls(res, sanitizeName(name), html);
-    }
-    if (req.method === 'GET') return serveStatic(req, res, u.pathname);
-    json(res, 405, { error:'method not allowed' });
-  } catch (err) {
-    console.error(err);
-    json(res, 500, { error: String(err.message || err) });
-  }
-});
-
-server.listen(PORT, '0.0.0.0', () => console.log(`shared-overtime-sheet v4 listening on ${PORT}`));
+const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
+function serveStatic(req,res,pathname){let file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));const fp=path.resolve(PUBLIC_DIR,file);if(!fp.startsWith(PUBLIC_DIR)){res.writeHead(403);return res.end('Forbidden')}fs.readFile(fp,(err,buf)=>{if(err){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'Content-Type':mime[path.extname(fp)]||'application/octet-stream','Cache-Control':'no-store'});res.end(buf);});}
+const server=http.createServer(async(req,res)=>{const u=new URL(req.url,`http://${req.headers.host}`);try{if(req.method==='GET'&&u.pathname==='/api/events'){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.write(`data: ${JSON.stringify({type:'data',data})}\n\n`);clients.add(res);req.on('close',()=>clients.delete(res));return;} if(req.method==='GET'&&u.pathname==='/api/data')return json(res,200,data); if(req.method==='POST'&&u.pathname==='/api/upsert'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:true,row:upsert(body.type,body.scope,body.row||{})});} if(req.method==='POST'&&u.pathname==='/api/delete'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:remove(body.type,body.scope,body.id)});} if(req.method==='GET'&&u.pathname==='/print/weekly'){const scope=u.searchParams.get('scope')||weekStartISO();const body=Buffer.from(weeklyPrintHtml(scope),'utf8');res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Length':body.length});return res.end(body);} if(req.method==='GET'&&u.pathname.startsWith('/api/export/')){const type=u.pathname.split('/').pop();const scope=u.searchParams.get('scope')||todayMonth();const mode=u.searchParams.get('mode')||'schedule';let buf,name;if(type==='overtime'){buf=mode==='confirm'?xlsxOvertimeConfirm(scope):xlsxOvertimeSchedule(scope);name=`${scope}_${mode==='confirm'?'개인시간외근무확인표':'시간외근무개인세부내역'}.xlsx`;} else if(type==='vehicle'){buf=xlsxVehicle(scope);name=`${scope}_차량운행일지.xlsx`;} else if(type==='card'){buf=xlsxCard(scope);name=`${scope}_신용체크카드사용내역.xlsx`;} else return json(res,404,{error:'unknown export'});return sendXlsx(res,sanitizeName(name),buf);} if(req.method==='GET')return serveStatic(req,res,u.pathname);json(res,405,{error:'method not allowed'});}catch(err){console.error(err);json(res,500,{error:String(err.message||err)});}});
+server.listen(PORT,'0.0.0.0',()=>console.log(`shared-worktables v5 listening on ${PORT}`));
