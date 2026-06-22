@@ -1,15 +1,15 @@
 {
   "name": "shared-overtime-sheet",
-  "version": "1.0.0",
+  "version": "4.0.0",
   "private": true,
-  "description": "로그인 없는 실시간 공동편집 시간외근무표 MVP",
+  "description": "무의존성(Node.js 기본 모듈만 사용) 공동 업무표: 시간외근무, 주간계획, 차량일지",
   "main": "server.js",
-  "scripts": {"start":"node server.js","dev":"node --watch server.js"},
-  "engines":{"node":">=20"},
-  "dependencies": {
-    "exceljs": "^4.4.0",
-    "express": "^5.1.0",
-    "helmet": "^8.1.0",
-    "socket.io": "^4.8.1"
-  }
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {}
 }

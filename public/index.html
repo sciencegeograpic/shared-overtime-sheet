@@ -1,12 +1,100 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>공동 업무표</title><link rel="stylesheet" href="/style.css"></head><body>
-<header class="app-header"><div><p class="eyebrow">LIVE SHARED WORKSPACE</p><h1 id="pageTitle">시간외근무 공동작성표</h1><p class="sub">입력 내용은 자동 저장되며 모든 접속자에게 실시간 반영됩니다.</p></div><div class="status"><span id="dot"></span><strong id="connection">연결 중</strong><small id="saved">저장 대기</small></div></header>
-<nav class="tabs" aria-label="업무표 선택"><button data-type="overtime" class="active">시간외근무표</button><button data-type="weekly">주간계획</button><button data-type="vehicle">차량일지</button></nav>
-<main>
-<section class="period-bar"><button id="prev" aria-label="이전 기간">‹</button><div><span id="periodLabel"></span><input id="monthPicker" type="month"><input id="weekPicker" type="date"></div><button id="next" aria-label="다음 기간">›</button></section>
-<section class="toolbar"><div class="summary"><div><span>작성 건수</span><strong id="count">0</strong></div><div id="totalBox"><span>총 시간</span><strong id="total">0시간</strong></div></div><div class="actions"><button id="add" class="primary">＋ 행 추가</button><a id="excel" class="button" href="#">Excel 다운로드</a><a id="scheduleExcel" class="button overtime-only" href="#">개인세부내역 양식</a><a id="confirmExcel" class="button overtime-only" href="#">확인표 양식</a><button id="print">인쇄</button></div></section>
-<section class="sheet-wrap"><table id="sheet"><thead></thead><tbody></tbody></table><div id="empty">아직 작성된 내용이 없습니다.<br><button onclick="document.querySelector('#add').click()">첫 행 추가하기</button></div></section>
-<p class="hint" id="hint">날짜 순으로 자동 정렬됩니다. Tab 키로 다음 칸으로 이동할 수 있습니다.</p>
-</main>
-<section class="print-head" aria-hidden="true"><div class="print-title"><h2 id="printTitle"></h2><p id="printPeriod"></p></div><table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table></section>
-<div class="stamp-box" aria-hidden="true"><span>직인</span></div>
-<script src="/socket.io/socket.io.js"></script><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>공동 업무표</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar no-print">
+      <div>
+        <h1>공동 업무표</h1>
+        <p>시간외근무 · 주간계획 · 차량일지</p>
+      </div>
+      <div class="status"><span id="syncDot"></span><span id="syncText">연결 중</span></div>
+    </header>
+
+    <nav class="tabs no-print">
+      <button class="tab active" data-tab="overtime">시간외근무표</button>
+      <button class="tab" data-tab="weekly">주간계획</button>
+      <button class="tab" data-tab="vehicle">차량일지</button>
+    </nav>
+
+    <main>
+      <section id="panel-overtime" class="panel active">
+        <div class="toolbar no-print">
+          <button id="otPrev">◀ 이전 달</button>
+          <input id="otMonth" type="month" />
+          <button id="otNext">다음 달 ▶</button>
+          <button id="otAdd" class="primary">행 추가</button>
+          <button id="otPrint">인쇄</button>
+          <a id="otExportSchedule" class="btn" href="#">개인 일정표 Excel</a>
+          <a id="otExportConfirm" class="btn" href="#">확인표 Excel</a>
+        </div>
+        <div class="print-head">
+          <table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table>
+          <h2>시간외근무 개인 일정표</h2>
+          <div id="otSubtitle" class="subtitle"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table ot-table">
+            <thead><tr><th>소속</th><th>성명</th><th>근무일</th><th>시작</th><th>종료</th><th>휴게</th><th>인정시간</th><th>근무 사유</th><th>비고</th><th class="no-print">삭제</th></tr></thead>
+            <tbody id="otBody"></tbody>
+          </table>
+        </div>
+        <div class="sum-line">월 합계: <b id="otTotal">0</b></div>
+        <div class="stamp">직인</div>
+      </section>
+
+      <section id="panel-weekly" class="panel">
+        <div class="toolbar no-print">
+          <button id="wkPrev">◀ 이전 주</button>
+          <input id="wkDate" type="date" />
+          <button id="wkNext">다음 주 ▶</button>
+          <button id="wkAdd" class="primary">행 추가</button>
+          <button id="wkPrint">인쇄</button>
+          <a id="wkExport" class="btn" href="#">주간계획 Excel</a>
+        </div>
+        <div class="print-head">
+          <table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table>
+          <h2>주 간 계 획</h2>
+          <div id="wkSubtitle" class="subtitle"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table wk-table">
+            <thead><tr><th>구분</th><th>사업</th><th>업무 계획</th><th>담당자 및 장소</th><th>비고</th><th class="no-print">삭제</th></tr></thead>
+            <tbody id="wkBody"></tbody>
+          </table>
+        </div>
+        <div class="stamp">직인</div>
+      </section>
+
+      <section id="panel-vehicle" class="panel">
+        <div class="toolbar no-print">
+          <button id="vhPrev">◀ 이전 달</button>
+          <input id="vhMonth" type="month" />
+          <button id="vhNext">다음 달 ▶</button>
+          <button id="vhAdd" class="primary">행 추가</button>
+          <button id="vhPrint">인쇄</button>
+          <a id="vhExport" class="btn" href="#">차량일지 Excel</a>
+        </div>
+        <div class="print-head">
+          <table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table>
+          <h2>차 량 운 행 일 지</h2>
+          <div id="vhSubtitle" class="subtitle"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table vh-table">
+            <thead><tr><th>사용일</th><th>차량</th><th>운전자</th><th>행선지</th><th>사용목적</th><th>출발</th><th>복귀</th><th>출발km</th><th>도착km</th><th>운행km</th><th>주유량</th><th>비고</th><th class="no-print">삭제</th></tr></thead>
+            <tbody id="vhBody"></tbody>
+          </table>
+        </div>
+        <div class="stamp">직인</div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
