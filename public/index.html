@@ -1,22 +1,25 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>공동 업무표</title><link rel="stylesheet" href="/style.css"></head><body>
-<header class="top"><div><h1>공동 업무표</h1><p>출력 서식 우선: 주간계획은 원본 문서형 구조로 편집하고 PDF로 저장합니다.</p></div><div class="status" id="status">연결 중</div></header>
-<nav class="tabs"><button data-tab="weekly" class="active">주간계획</button><button data-tab="overtime">시간외근무</button><button data-tab="cards">신용·체크카드</button><button data-tab="vehicle">차량일지</button></nav>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>공동 업무표</title><link rel="stylesheet" href="/style.css"></head><body>
+<header><h1>공동 업무표</h1><span id="status">연결 중...</span></header>
+<nav class="tabs"><button data-tab="weekly" class="active">주간계획</button><button data-tab="overtimeDetail">시간외근무 개인세부내역</button><button data-tab="overtimeConfirm">개인시간외근무확인표</button><button data-tab="cards">신용·체크카드</button><button data-tab="vehicle">차량일지</button></nav>
 <main>
 <section id="weekly" class="panel active">
-  <div class="toolbar"><button id="prevWeek">이전 주</button><input type="date" id="weekScope"><button id="nextWeek">다음 주</button><button class="primary" id="printWeekly">주간계획 PDF 저장/인쇄</button><span class="hint">PDF는 A4 세로, 원본처럼 1쪽씩 출력됩니다.</span></div>
+  <div class="toolbar"><button id="prevWeek">이전 주</button><input type="date" id="weekScope"><button id="nextWeek">다음 주</button><button class="primary" id="printWeekly">주간계획 PDF 저장/인쇄</button><span class="hint">편집 화면에는 결재칸이 없고, 인쇄/PDF 화면에만 표시됩니다.</span></div>
   <div id="weeklyEditor"></div>
 </section>
-<section id="overtime" class="panel">
-  <div class="toolbar"><button data-prev="otMonth">이전 달</button><input type="month" id="otMonth"><button data-next="otMonth">다음 달</button><button class="primary" id="addOvertime">행 추가</button><button id="downloadOvertime">시간외근무 확인표 XLSX</button><button id="downloadOvertimeSchedule">개인 일정표 XLSX</button></div>
-  <div id="overtimeTable" class="sheet"></div>
+<section id="overtimeDetail" class="panel">
+  <div class="toolbar"><button data-prev="otDetailMonth">이전 달</button><input type="month" id="otDetailMonth"><button data-next="otDetailMonth">다음 달</button><button class="primary" id="addOvertimeDetail">행 추가</button><button id="downloadOvertimeDetail">개별작성-시간외근무 개인세부내역 XLSX</button><span class="hint">달력형 개인세부내역: 날짜 칸에 이름(시간) 형태로 들어갑니다.</span></div>
+  <div id="overtimeDetailTable" class="sheet"></div>
+</section>
+<section id="overtimeConfirm" class="panel">
+  <div class="toolbar"><button data-prev="otConfirmMonth">이전 달</button><input type="month" id="otConfirmMonth"><button data-next="otConfirmMonth">다음 달</button><button class="primary" id="addOvertimeConfirm">행 추가</button><button id="downloadOvertimeConfirm">개별작성-개인시간외근무확인표 XLSX</button><span class="hint">목록형 확인표: 직원별 날짜 및 근무시간 제출 여부를 확인합니다.</span></div>
+  <div id="overtimeConfirmTable" class="sheet"></div>
 </section>
 <section id="cards" class="panel">
-  <div class="toolbar"><button data-prev="cardMonth">이전 달</button><input type="month" id="cardMonth"><button data-next="cardMonth">다음 달</button><button class="primary" id="addCard">행 추가</button><button id="downloadCards">XLSX 내보내기</button></div>
+  <div class="toolbar"><button data-prev="cardMonth">이전 달</button><input type="month" id="cardMonth"><button data-next="cardMonth">다음 달</button><button class="primary" id="addCard">행 추가</button><button id="downloadCards">신용·체크카드 사용내역 XLSX</button></div>
   <div id="cardTable" class="sheet"></div>
 </section>
 <section id="vehicle" class="panel">
-  <div class="toolbar"><button data-prev="vehMonth">이전 달</button><input type="month" id="vehMonth"><button data-next="vehMonth">다음 달</button><button class="primary" id="addVehicle">행 추가</button><button id="downloadVehicle">XLSX 내보내기</button></div>
+  <div class="toolbar"><button data-prev="vehMonth">이전 달</button><input type="month" id="vehMonth"><button data-next="vehMonth">다음 달</button><button class="primary" id="addVehicle">행 추가</button><button id="downloadVehicle">차량일지 XLSX</button></div>
   <div id="vehicleTable" class="sheet"></div>
 </section>
-</main>
-<script src="/app.js"></script></body></html>
+</main><script src="/app.js"></script></body></html>
