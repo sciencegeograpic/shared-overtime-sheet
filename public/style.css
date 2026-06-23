@@ -2,3 +2,5 @@
 
 .doc-tabs .add-page{border-style:dashed;background:#f8fafc;color:#2563eb;font-weight:800}.simple-head{grid-template-columns:1fr auto}.simple-head h2{letter-spacing:0;padding-left:0;text-align:left;font-size:24px;font-family:system-ui,"Malgun Gothic",sans-serif;margin:0 0 12px}.page-tools button{border:1px solid #fecaca;color:#b91c1c;background:#fff;border-radius:8px;padding:8px 10px;font-weight:700}.form-meta{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;font-family:system-ui,"Malgun Gothic",sans-serif;font-size:14px;margin-bottom:8px}.form-meta label{display:flex;flex-direction:column;gap:5px;font-weight:700}.form-meta input{height:40px;border:1px solid #c9d3e1;border-radius:8px;padding:0 10px;font:inherit}.editor-note{margin:8px 0 12px;color:#64748b;font-size:14px}.weekly-page-edit{border:2px solid #e5e7eb;border-radius:12px}.weekly-edit-table .vertical{writing-mode:horizontal-tb;letter-spacing:0;}.weekly-edit-table .vertical textarea{text-align:center;font-weight:700;min-height:80px}
 @media(max-width:760px){.form-meta{grid-template-columns:1fr}.doc-tabs{overflow:auto}.doc-tabs button{white-space:nowrap}}
+
+.overtime-grid{min-width:1450px}
