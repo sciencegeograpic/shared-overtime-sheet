@@ -1,89 +1,22 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>공동 업무표</title>
-  <link rel="stylesheet" href="/style.css" />
-</head>
-<body>
-  <div class="app-shell">
-    <header class="topbar no-print">
-      <div>
-        <h1>공동 업무표</h1>
-        <p>시간외근무 · 주간계획 · 차량일지 · 신용/체크카드 사용내역</p>
-      </div>
-      <div class="status"><span id="syncDot"></span><span id="syncText">연결 중</span></div>
-    </header>
-
-    <nav class="tabs no-print">
-      <button class="tab active" data-tab="overtime">시간외근무</button>
-      <button class="tab" data-tab="weekly">주간계획</button>
-      <button class="tab" data-tab="vehicle">차량일지</button>
-      <button class="tab" data-tab="card">카드사용내역</button>
-    </nav>
-
-    <main>
-      <section id="panel-overtime" class="panel active">
-        <div class="module-intro no-print"><strong>서식 우선:</strong> Excel 내보내기는 실제 .xlsx 형식으로 생성됩니다. 경고창 없이 열리는 방식입니다.</div>
-        <div class="toolbar no-print">
-          <button id="otPrev">◀ 이전 달</button>
-          <input id="otMonth" type="month" />
-          <button id="otNext">다음 달 ▶</button>
-          <button id="otAdd" class="primary">행 추가</button>
-          <button id="otPrint">인쇄</button>
-          <a id="otExportSchedule" class="btn" href="#">개인세부내역 .xlsx</a>
-          <a id="otExportConfirm" class="btn" href="#">확인표 .xlsx</a>
-        </div>
-        <div class="print-head five-approval">
-          <table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table>
-          <h2>시간외근무 개인세부내역</h2>
-          <div id="otSubtitle" class="subtitle"></div>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table ot-table"><thead><tr><th>소속</th><th>성명</th><th>근무일</th><th>시작</th><th>종료</th><th>휴게</th><th>인정시간</th><th>근무 사유</th><th>비고</th><th class="no-print">삭제</th></tr></thead><tbody id="otBody"></tbody></table>
-        </div>
-        <div class="sum-line">총 인정시간: <strong id="otTotal">0</strong></div><div class="stamp">직인</div>
-      </section>
-
-      <section id="panel-weekly" class="panel">
-        <div class="module-intro no-print"><strong>주간계획:</strong> 업로드하신 PDF처럼 A4 한 장에 2면 배치되는 PDF/인쇄 전용 화면으로 내보냅니다.</div>
-        <div class="toolbar no-print">
-          <button id="wkPrev">◀ 이전 주</button>
-          <input id="wkDate" type="date" />
-          <button id="wkNext">다음 주 ▶</button>
-          <button id="wkAdd" class="primary">행 추가</button>
-          <a id="wkPdf" class="btn strong" target="_blank" href="#">주간계획 PDF/인쇄</a>
-        </div>
-        <div class="print-head weekly-head">
-          <table class="approval small"><tr><th rowspan="2">결<br>재</th><th>담 당</th><th>부 장</th></tr><tr><td></td><td></td></tr></table>
-          <h2>주 간 계 획</h2>
-          <div id="wkSubtitle" class="subtitle"></div>
-        </div>
-        <div class="table-wrap"><table class="data-table wk-table"><thead><tr><th>구분</th><th>사업</th><th>업무계획</th><th>담당자 및 장소</th><th>비고</th><th class="no-print">삭제</th></tr></thead><tbody id="wkBody"></tbody></table></div>
-      </section>
-
-      <section id="panel-vehicle" class="panel">
-        <div class="toolbar no-print">
-          <button id="vhPrev">◀ 이전 달</button><input id="vhMonth" type="month" /><button id="vhNext">다음 달 ▶</button>
-          <button id="vhAdd" class="primary">행 추가</button><button id="vhPrint">인쇄</button><a id="vhExport" class="btn" href="#">차량일지 .xlsx</a>
-        </div>
-        <div class="print-head five-approval"><table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table><h2>차 량 운 행 일 지</h2><div id="vhSubtitle" class="subtitle"></div></div>
-        <div class="table-wrap"><table class="data-table vh-table"><thead><tr><th>사용일</th><th>차량</th><th>운전자</th><th>행선지</th><th>사용목적</th><th>출발</th><th>복귀</th><th>출발km</th><th>도착km</th><th>운행km</th><th>주유량</th><th>비고</th><th class="no-print">삭제</th></tr></thead><tbody id="vhBody"></tbody></table></div><div class="stamp">직인</div>
-      </section>
-
-      <section id="panel-card" class="panel">
-        <div class="module-intro no-print"><strong>신용·체크카드 사용내역:</strong> 보조금/자부담/후원금 구분을 넣어 월별 사용내역을 작성하고 .xlsx로 내보냅니다.</div>
-        <div class="toolbar no-print">
-          <button id="cardPrev">◀ 이전 달</button><input id="cardMonth" type="month" /><button id="cardNext">다음 달 ▶</button>
-          <button id="cardAdd" class="primary">행 추가</button><button id="cardPrint">인쇄</button><a id="cardExport" class="btn" href="#">카드사용내역 .xlsx</a>
-        </div>
-        <div class="print-head five-approval"><table class="approval"><tr><th>담당</th><th>팀장</th><th>부장</th><th>국장</th><th>관장</th></tr><tr><td></td><td></td><td></td><td></td><td></td></tr></table><h2>신용·체크카드 사용내역</h2><div id="cardSubtitle" class="subtitle"></div></div>
-        <div class="table-wrap"><table class="data-table card-table"><thead><tr><th>사용일</th><th>구분</th><th>카드명</th><th>사용처</th><th>사용내역</th><th>금액</th><th>계정과목</th><th>증빙</th><th>비고</th><th class="no-print">삭제</th></tr></thead><tbody id="cardBody"></tbody></table></div>
-        <div class="sum-line">합계: <strong id="cardTotal">0원</strong></div><div class="stamp">직인</div>
-      </section>
-    </main>
-  </div>
-  <script src="/app.js"></script>
-</body>
-</html>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>공동 업무표</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="top"><div><h1>공동 업무표</h1><p>출력 서식 우선: 주간계획은 원본 문서형 구조로 편집하고 PDF로 저장합니다.</p></div><div class="status" id="status">연결 중</div></header>
+<nav class="tabs"><button data-tab="weekly" class="active">주간계획</button><button data-tab="overtime">시간외근무</button><button data-tab="cards">신용·체크카드</button><button data-tab="vehicle">차량일지</button></nav>
+<main>
+<section id="weekly" class="panel active">
+  <div class="toolbar"><button id="prevWeek">이전 주</button><input type="date" id="weekScope"><button id="nextWeek">다음 주</button><button class="primary" id="printWeekly">주간계획 PDF 저장/인쇄</button><span class="hint">PDF는 A4 세로, 원본처럼 1쪽씩 출력됩니다.</span></div>
+  <div id="weeklyEditor"></div>
+</section>
+<section id="overtime" class="panel">
+  <div class="toolbar"><button data-prev="otMonth">이전 달</button><input type="month" id="otMonth"><button data-next="otMonth">다음 달</button><button class="primary" id="addOvertime">행 추가</button><button id="downloadOvertime">원본형 XLSX 내보내기</button></div>
+  <div id="overtimeTable" class="sheet"></div>
+</section>
+<section id="cards" class="panel">
+  <div class="toolbar"><button data-prev="cardMonth">이전 달</button><input type="month" id="cardMonth"><button data-next="cardMonth">다음 달</button><button class="primary" id="addCard">행 추가</button><button id="downloadCards">XLSX 내보내기</button></div>
+  <div id="cardTable" class="sheet"></div>
+</section>
+<section id="vehicle" class="panel">
+  <div class="toolbar"><button data-prev="vehMonth">이전 달</button><input type="month" id="vehMonth"><button data-next="vehMonth">다음 달</button><button class="primary" id="addVehicle">행 추가</button><button id="downloadVehicle">XLSX 내보내기</button></div>
+  <div id="vehicleTable" class="sheet"></div>
+</section>
+</main>
+<script src="/app.js"></script></body></html>

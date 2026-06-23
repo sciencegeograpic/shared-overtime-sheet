@@ -1,129 +1,137 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 const crypto = require('crypto');
-const { URL } = require('url');
 
 const PORT = process.env.PORT || 3000;
-const ROOT = __dirname;
-const PUBLIC_DIR = path.join(ROOT, 'public');
-const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'app-data.json');
-const TEMPLATE_DIR = path.join(ROOT, 'templates');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const clients = new Set();
 
-function id(){return crypto.randomUUID();}
-function nowISO(){return new Date().toISOString();}
-function todayMonth(){return new Date().toISOString().slice(0,7);}
-function weekStartISO(date = new Date()){const d=new Date(date);const day=d.getDay();d.setDate(d.getDate()+(day===0?-6:1-day));return d.toISOString().slice(0,10);}
-function addDaysISO(s,n){const d=new Date(s);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
-function ymdParts(s){const [y,m,d]=String(s||'').split('-').map(Number);return {y,m,d};}
-function monthLabel(scope){const {y,m}=ymdParts(scope+'-01'); return `${y}년 ${m}월`;}
-function monthNum(scope){return Number(scope.split('-')[1]);}
-function weekLabel(scope){const e=addDaysISO(scope,5); const a=ymdParts(scope), b=ymdParts(e); return `${a.y}년 ${a.m}월 ${a.d}일 ~ ${b.m}월 ${b.d}일`;}
-function minutesBetween(start,end,breakMinutes){if(!/^\d{2}:\d{2}$/.test(start||'')||!/^\d{2}:\d{2}$/.test(end||''))return 0; const [sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number);let s=sh*60+sm,e=eh*60+em;if(e<s)e+=1440;return Math.max(0,e-s-(Number(breakMinutes)||0));}
-function formatHours(min){min=Number(min)||0;const h=Math.floor(min/60),m=min%60; if(h&&m)return `${h}시간 ${m}분`; if(h)return `${h}시간`; if(m)return `${m}분`; return '0';}
-function htmlEscape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function sanitizeName(name){return String(name||'download').replace(/[\\/:*?"<>|]/g,'_');}
-function blankData(){return {version:5,overtime:{},weekly:{},vehicle:{},card:{}};}
-function row(section,business,plan,ownerPlace,note=''){return {id:id(),section,business,plan,ownerPlace,note,updatedAt:nowISO()};}
-function seedWeekly(){const key='2026-06-22';return {[key]:[
-row('노년사회화교육팀','노년사회화 교육','- DSB방송단 6월 간담회 실시(수, 11시)\n- 슬어생 5~6회기 실시(수,금 14시)\n- 덕진동치매안심마을 운영위원회의참석(수 15시)\n- 선배시민 권역 간담회 참석(목, 16시)\n- 월드컵 단체 시청(목, 10시)\n- 2분기 신입회원 환영회(금, 10:30)\n- 사회복지현장실습 실시(금, 13:30)','- 노년사회화\n- 문승영(덕진주민센터)\n- 김수희\n- 사랑방\n- 2층 믿음방\n- 3층 두란노'),
-row('노년사회화교육팀','건강관리','- 인지향상프로그램(월, 14:00~15:00)\n- 촉탁의 방문진료(수, 13:40~)\n- 낙상예방 프로그램 2회차 참여자 모집','- 복종현,윤숙영'),
-row('노년사회화교육팀','작은도서관','- 상반기 문화시설 이용자현황 제출(시립)\n- 전북·전주 작은도서관 운영협의회 회비 납부','- 형이삭'),
-row('지역복지팀','노인일자리','- 공원관리, 복지시설 사업단 활동물품 구입(주중)\n- 초록정원관리사 혹서기 교육 사업계획서 작성(주중)\n- 시니어 한끼 지원사업 참여자 만족도 조사서 제출(주중)\n- 국민연금 수급자 공감여행 결과 및 정산보고 제출(주중)','- 노인일자리\n- 허혜경, 이혜수\n- 김효진'),
-row('지역복지팀','사례관리 및 지역사회돌봄','- 노인자원봉사활성화 지원사업 6월 결과보고(주중)\n- 함께헤어 봉사단 무료 이미용 진행(화, 09:30~11:30)\n- 함께헤어 봉사단 이미용 봉사 협약식(화, 09:30)\n- 희망여름 착착착 준비(주중)\n- 사례관리 및 자원봉사자 관리(주중)','- 정인석'),
-row('지역복지팀','노인복지관 연계프로그램','- 경로당 파견 프로그램모니터링 및 강의일지 확인(주중)\n- 경로당 영양쿠킹클래스 1회기 진행\n  (송천사랑 24일, 수, 14시)','- 조혜숙'),
-row('지역복지팀','기획홍보 및 지역복지총괄','- 금암노인복지관 25주년 행사 참가(목, 10:00)\n- 선배시민 전주권역 간담회 참석(목, 16:00~)\n- 늘푸른합창단 개정면행정복지센터 공연(금, 9시10분~)\n- 복지관홍보(주중)','- 중부비전센터,카페토브\n토\n- 김수희, 문승영, 정인석'),
-row('지역복지팀','기타','- 휴가: 김수희(화), 문승영(화,오후), 형이삭(수)',''),
-row('총무팀','서무·회계','- 6월 직원 급여 및 퇴직금 이체(6/25)\n- 2분기 운영위원회 관련 회계 서류 작성(~6/24)\n- 상반기 연차사용촉진 관련서류 작성','- 임미정, 최혜림'),
-row('총무팀','시설관리','- 안전훈련 및 소방훈련(6/22)\n- 복지관 3층 복도 청소(6/26)\n- 사회복무요원 복무예정자 인수(6/26)\n- 전기 설비 정기 점검','- 최정환'),
-row('영양팀','경로식당','- 경로당 쿠킹클래스 1회기 (송천사랑,오이피클)\n- 3분기 생신잔치\n- 조리종사자 주휴수당 및 급여기안작성','- 이경님,이기순'),
-row('아중노인복지관','노년사회화 분관총괄','- 깨끗한 세상 소득 2차(화)\n- 집단상담 다시 피어나는 청춘 5회기 종결(수, 10시)\n- 집단상담 프로그램 포토북 제작(주중)\n- 분관 운영위원회 및 1차 추경예산 자료 작성(주중)\n- FIFA 북중미 월드컵 대한민국 대표팀 단체 시청(목, 10시)','- 엄라영 최유리'),
-row('아중노인복지관','경로식당','- 조리종사자 급여 주휴수당 기안작성\n- 상반기 생신잔치 실시(목)\n- 6.26 대체식 포장 및 제공','- 윤재희\n- 윤재희, 강정미\n- 윤재희, 강정미'),
-row('아중노인복지관','토당직(아중)','- 윤재희',''),
-row('아중노인복지관','휴가','- 엄라영(화, 오후 2h), 강정미(금)',''),
-row('(노·지·총·영)','부장','- 운영위원회 자료 취합 및 정리(주중)\n- 늘푸른합창단 개정면 공연 버스지원(금 09:10)\n- 복지관업무 총괄(후원,후백제교육관련준비,실습)','- 개정면행정복지센터'),
-row('(노·지·총·영)','사무국장','- 전주연탄은행 밥차 검사 지원(월)\n- 금암노인복지관 25주년 행사 참가(목, 10:00)\n- 3층 돌돌이 바닥청소(금. 14:00)\n- 지역사회 버스지원(토)\n- 직원 업무관리 및 사업주훈련 준비','- 국장\n- 관장,국장,부장,김팀장\n- 국장\n- 국장\n- 국장')
-]};}
-function migrate(input){const base=blankData(); if(Array.isArray(input)){for(const r of input){const m=/^\d{4}-\d{2}/.test(r.workDate||'')?r.workDate.slice(0,7):todayMonth();(base.overtime[m]||=[]).push({...r,totalMinutes:minutesBetween(r.startTime,r.endTime,r.breakMinutes)});}return base;} const out={...base,...input,overtime:input?.overtime||{},weekly:input?.weekly||{},vehicle:input?.vehicle||{},card:input?.card||{}}; if(!out.weekly['2026-06-22']) out.weekly={...seedWeekly(),...out.weekly}; return out;}
-function loadData(){try{return migrate(JSON.parse(fs.readFileSync(DATA_FILE,'utf8')))}catch{const d=migrate(blankData());saveData(d);return d;}}
-function saveData(d){fs.mkdirSync(DATA_DIR,{recursive:true});const tmp=DATA_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(d,null,2));fs.renameSync(tmp,DATA_FILE);}
-let data=loadData();
-function sortData(){for(const rows of Object.values(data.overtime||{}))rows.sort((a,b)=>String(a.workDate||'').localeCompare(String(b.workDate||''))||String(a.startTime||'').localeCompare(String(b.startTime||''))||String(a.name||'').localeCompare(String(b.name||'')));for(const rows of Object.values(data.vehicle||{}))rows.sort((a,b)=>String(a.useDate||'').localeCompare(String(b.useDate||''))||String(a.departTime||'').localeCompare(String(b.departTime||'')));for(const rows of Object.values(data.card||{}))rows.sort((a,b)=>String(a.useDate||'').localeCompare(String(b.useDate||''))||String(a.fund||'').localeCompare(String(b.fund||'')));}
-function broadcast(){sortData();const payload=`data: ${JSON.stringify({type:'data',data})}\n\n`;for(const res of clients){try{res.write(payload)}catch{}}}
-function json(res,status,obj){const body=JSON.stringify(obj);res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Content-Length':Buffer.byteLength(body)});res.end(body);}
-function readBody(req){return new Promise((resolve,reject)=>{let b='';req.on('data',d=>{b+=d;if(b.length>2e6){req.destroy();reject(new Error('too large'));}});req.on('end',()=>resolve(b));req.on('error',reject);});}
-function ensureRows(type,scope){if(!data[type])data[type]={};if(!data[type][scope])data[type][scope]=[];return data[type][scope];}
-function upsert(type,scope,row){if(!data[type])data[type]={}; if(!data[type][scope])data[type][scope]=[]; const rows=data[type][scope]; if(!row.id)row.id=id(); row.updatedAt=nowISO(); if(type==='overtime')row.totalMinutes=minutesBetween(row.startTime,row.endTime,row.breakMinutes); if(type==='vehicle')row.distance=Math.max(0,(Number(row.endKm)||0)-(Number(row.startKm)||0)); if(type==='card')row.amount=Number(row.amount)||0; const idx=rows.findIndex(r=>r.id===row.id); if(idx>=0)rows[idx]={...rows[idx],...row}; else rows.push(row); sortData(); saveData(data); broadcast(); return row;}
-function remove(type,scope,idval){if(!data[type]?.[scope])return false;data[type][scope]=data[type][scope].filter(r=>r.id!==idval);saveData(data);broadcast();return true;}
-
-// --- Minimal OOXML .xlsx writer (no dependencies) ---
-function crc32(buf){let table=crc32.table;if(!table){table=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=((c&1)?(0xEDB88320^(c>>>1)):(c>>>1));table[n]=c>>>0;}crc32.table=table;}let crc=0^(-1);for(let i=0;i<buf.length;i++)crc=(crc>>>8)^table[(crc^buf[i])&0xff];return (crc^(-1))>>>0;}
-function dosDateTime(d=new Date()){let dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();let tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);return {dt,tm};}
-function zipStore(files){let chunks=[],central=[],offset=0;const dd=dosDateTime();for(const f of files){const nameBuf=Buffer.from(f.name,'utf8'),dataBuf=Buffer.isBuffer(f.data)?f.data:Buffer.from(f.data,'utf8'),crc=crc32(dataBuf);const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0x0800,6);local.writeUInt16LE(0,8);local.writeUInt16LE(dd.tm,10);local.writeUInt16LE(dd.dt,12);local.writeUInt32LE(crc,14);local.writeUInt32LE(dataBuf.length,18);local.writeUInt32LE(dataBuf.length,22);local.writeUInt16LE(nameBuf.length,26);local.writeUInt16LE(0,28);chunks.push(local,nameBuf,dataBuf);const c=Buffer.alloc(46);c.writeUInt32LE(0x02014b50,0);c.writeUInt16LE(20,4);c.writeUInt16LE(20,6);c.writeUInt16LE(0x0800,8);c.writeUInt16LE(0,10);c.writeUInt16LE(dd.tm,12);c.writeUInt16LE(dd.dt,14);c.writeUInt32LE(crc,16);c.writeUInt32LE(dataBuf.length,20);c.writeUInt32LE(dataBuf.length,24);c.writeUInt16LE(nameBuf.length,28);c.writeUInt16LE(0,30);c.writeUInt16LE(0,32);c.writeUInt16LE(0,34);c.writeUInt16LE(0,36);c.writeUInt32LE(0,38);c.writeUInt32LE(offset,42);central.push(c,nameBuf);offset+=local.length+nameBuf.length+dataBuf.length;}const centralStart=offset;const centralBuf=Buffer.concat(central);const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(0,4);end.writeUInt16LE(0,6);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(centralBuf.length,12);end.writeUInt32LE(centralStart,16);end.writeUInt16LE(0,20);return Buffer.concat([...chunks,centralBuf,end]);}
-function xe(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));}
-function colName(n){let s=''; while(n>0){let m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;}
-function cellXml(c,r,cell){if(cell==null||cell.v==null||cell.v==='')return '';let ref=colName(c)+r;let s=cell.s?` s="${cell.s}"`:''; if(typeof cell.v==='number'&&!cell.t){return `<c r="${ref}"${s}><v>${cell.v}</v></c>`;} return `<c r="${ref}" t="inlineStr"${s}><is><t xml:space="preserve">${xe(cell.v)}</t></is></c>`;}
-function sheetXml(sheet){const maxR=sheet.rows.length,maxC=Math.max(...sheet.rows.map(r=>r.length),1);let cols=''; if(sheet.cols){cols='<cols>'+sheet.cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>';}let rows=sheet.rows.map((row,ri)=>{const r=ri+1;let ht=sheet.heights?.[ri]?` ht="${sheet.heights[ri]}" customHeight="1"`:'';let cells=row.map((c,i)=>cellXml(i+1,r,c)).join('');return `<row r="${r}"${ht}>${cells}</row>`;}).join('');let merges=sheet.merges?.length?`<mergeCells count="${sheet.merges.length}">${sheet.merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:'';let page=`<pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.1" footer="0.1"/><pageSetup paperSize="9" orientation="${sheet.orientation||'portrait'}" fitToWidth="1" fitToHeight="0"/><printOptions horizontalCentered="1"/>`;return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${colName(maxC)}${maxR}"/><sheetViews><sheetView workbookViewId="0"/></sheetViews>${cols}<sheetData>${rows}</sheetData>${merges}${page}</worksheet>`;}
-function stylesXml(){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="6"><font><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="16"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font><font><b/><color rgb="FFFF0000"/><sz val="10"/><name val="맑은 고딕"/></font><font><color rgb="FF0070C0"/><b/><sz val="10"/><name val="맑은 고딕"/></font></fonts><fills count="8"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF2F8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="13"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf fontId="2" fillId="0" borderId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1"/></xf><xf fontId="1" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf fontId="1" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="4" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="5" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="5" borderId="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf fontId="3" fillId="6" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="7" borderId="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;}
-function workbookXml(sheets){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><workbookPr/><sheets>${sheets.map((s,i)=>`<sheet name="${xe(s.name).slice(0,31)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`;}
-function workbookRels(sheets){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;}
-function contentTypes(sheets){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;}
-function makeXlsx(sheets){const files=[{name:'[Content_Types].xml',data:contentTypes(sheets)},{name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},{name:'xl/workbook.xml',data:workbookXml(sheets)},{name:'xl/_rels/workbook.xml.rels',data:workbookRels(sheets)},{name:'xl/styles.xml',data:stylesXml()},...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:sheetXml(s)}))];return zipStore(files);}
-function blankCell(s=3){return {v:'',s};}
-function c(v,s=0){return {v,s};}
-function sendXlsx(res,filename,buffer){res.writeHead(200,{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,'Content-Length':buffer.length});res.end(buffer);}
-function approvalRows(five=true){if(five){return [[c('결재',3),c('담당',2),c('팀장',2),c('부장',2),c('국장',2),c('관장',2)],[blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell()]];}return [[c('결재',3),c('담 당',2),c('부 장',2)],[blankCell(),blankCell(),blankCell()]];}
-function xlsxOvertimeSchedule(scope){const rows=ensureRows('overtime',scope);const {y,m}=ymdParts(scope+'-01');const first=new Date(y,m-1,1);const last=new Date(y,m,0).getDate();const startDay=first.getDay();const weeks=[];let day=1-startDay;while(day<=last){const week=[];for(let dow=0;dow<7;dow++){week.push(day>=1&&day<=last?day:null);day++;}weeks.push(week);}const byDate={};for(const r of rows){(byDate[r.workDate]||=[]).push(`${r.name||''}${r.totalMinutes?`(${Math.round(r.totalMinutes/60*10)/10})`:''}`);}const out=[];const merges=['A2:G2'];out.push([c('',0),c('',0),c('',0),c('',0),c('',0),c('',0),c('',0)]);out.push([c(`${y}년 ${m}월 시간외근무 개인세부내역`,1),blankCell(0),blankCell(0),blankCell(0),blankCell(0),blankCell(0),blankCell(0)]);out.push([c('',0),c('',0),c('',0),c('',0),c('',0),c('',0),c('덕진노인복지관',9)]);out.push(['일','월','화','수','목','금','토'].map(v=>c(v,2)));for(const w of weeks){const rIdx=out.length+1;out.push(w.map((d,i)=>d?c(`${m}/${d}`,i===0?7:i===6?8:6):c('',6)));for(let k=0;k<7;k++){out.push(w.map(d=>{if(!d)return c('',3);const list=byDate[`${scope}-${String(d).padStart(2,'0')}`]||[];return c(list[k]||'',3);}));}}
-return makeXlsx([{name:`${m}월`,cols:[16,16,16,16,16,16,16],heights:out.map((_,i)=>i===1?26:(i>=4&&out[i][0]?.s===6?23:28)),merges,orientation:'landscape',rows:out}]);}
-function xlsxOvertimeConfirm(scope){const rows=ensureRows('overtime',scope);const people={};for(const r of rows){const name=r.name||'미입력';if(!people[name])people[name]={department:r.department||'',name,items:[]};const md=r.workDate?`${Number(r.workDate.slice(5,7))}/${Number(r.workDate.slice(8,10))}`:'';people[name].items.push(`${md}(${Math.round((Number(r.totalMinutes)||0)/60*10)/10})`);}const list=Object.values(people).sort((a,b)=>a.name.localeCompare(b.name,'ko'));const m=monthNum(scope);const title=`${m}월 시간외근무 확인표`;const out=[];const merges=['A1:D1','E1:I1'];out.push([c(title,1),blankCell(),blankCell(),blankCell(),c(`1) 작성 및 제출은 익월 5일 이전까지\n2) 근무시간은 앞뒤로 정시기준 5분정도만 차이나게 작성해주세요.`,5),blankCell(),blankCell(),blankCell(),blankCell()]);out.push(['연번','근무처','직위','성명','완료여부','날짜 및 근무시간','근무상황부 제출여부','명령서 제출여부','시간외근무확인대장 작성여부'].map(v=>c(v,2)));list.forEach((p,i)=>out.push([c(i+1,3),c(i===0?'본관':'',3),c('',3),c(p.name,3),c('완료',3),c(p.items.join(', '),4),c('',3),c('',3),c('',3)]));while(out.length<18)out.push(Array(9).fill(0).map(()=>blankCell(3)));return makeXlsx([{name:`${m}월`,cols:[7,10,12,12,11,30,17,15,22],heights:out.map((_,i)=>i===0?38:22),merges,orientation:'landscape',rows:out}]);}
-function xlsxVehicle(scope){const rows=ensureRows('vehicle',scope);const out=[];const merges=['A1:L1','H2:L3'];out.push([c('차 량 운 행 일 지',1),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),c('결재',3),c('담당',2),c('팀장',2),c('부장',2),c('관장',2)]);out.push([c(scope,9),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell()]);out.push(['순번','사용일','차량','운전자','행선지','사용목적','출발','복귀','출발km','도착km','운행km','비고'].map(v=>c(v,2)));rows.forEach((r,i)=>out.push([c(i+1,3),c(r.useDate,3),c(r.car,3),c(r.driver,3),c(r.destination,4),c(r.purpose,4),c(r.departTime,3),c(r.returnTime,3),c(Number(r.startKm)||'',3),c(Number(r.endKm)||'',3),c(Number(r.distance)||'',3),c(r.note,4)]));while(out.length<25)out.push(Array(12).fill(0).map(()=>blankCell(3)));return makeXlsx([{name:'차량일지',cols:[6,12,12,12,18,22,10,10,10,10,10,20],heights:out.map((_,i)=>i===0?30:24),merges,orientation:'landscape',rows:out}]);}
-function xlsxCard(scope){const rows=ensureRows('card',scope);const out=[];const merges=['A1:J1','G2:J3'];out.push([c(`${monthLabel(scope)} 신용·체크카드 사용내역`,1),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),c('결재',3),c('담당',2),c('부장',2),c('관장',2)]);out.push([c('구분: 보조금 / 자부담 / 후원금',9),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell(),blankCell()]);out.push(['순번','사용일','구분','카드명','사용처','사용내역','금액','계정과목','증빙','비고'].map(v=>c(v,2)));rows.forEach((r,i)=>out.push([c(i+1,3),c(r.useDate,3),c(r.fund,3),c(r.cardName,3),c(r.vendor,4),c(r.description,4),c(Number(r.amount)||0,10),c(r.account,3),c(r.proof,3),c(r.note,4)]));const sum=rows.reduce((s,r)=>s+(Number(r.amount)||0),0);out.push([c('',0),c('',0),c('',0),c('',0),c('',0),c('합계',11),c(sum,10),c('',0),c('',0),c('',0)]);while(out.length<25)out.push(Array(10).fill(0).map(()=>blankCell(3)));return makeXlsx([{name:'카드사용내역',cols:[6,12,12,15,20,28,14,15,12,20],heights:out.map((_,i)=>i===0?30:24),merges,orientation:'portrait',rows:out}]);}
-
-function weeklyPrintHtml(scope){
-  const rows=ensureRows('weekly',scope);
-  const secondSections=['총무팀','영양팀','아중노인복지관','(노·지·총·영)','부장','사무국장'];
-  const first=rows.filter(r=>!secondSections.includes(r.section));
-  const second=rows.filter(r=>secondSections.includes(r.section));
-  function approval(){return '<table class="wk-approval"><tr><th rowspan="2" class="approval-title">결<br>재</th><th>담 당</th><th>부 장</th></tr><tr><td></td><td></td></tr></table>';}
-  function cellText(v){return htmlEscape(String(v||'').replace(/^\s*-\s*/gm,'- ').trim());}
-  function groupRows(list){
-    const groups=[];
-    for(const r of list){
-      const g=groups[groups.length-1];
-      if(g && g.section===r.section) g.rows.push(r); else groups.push({section:r.section, rows:[r]});
+const seed = () => ({
+  overtime: {},
+  vehicle: {},
+  cards: {},
+  weekly: {
+    '2026-06-22': {
+      start: '2026-06-22', end: '2026-06-27',
+      pages: [
+        { id:'p1', title:'노년사회화팀, 지역복지팀', approval:['','',''], rows:[
+          {group:'노년사회화교육팀', business:'노년\n사회화\n교육', plan:['DSB방송단 6월 간담회 실시(수, 11시)','슬어생 5~6회기 실시(수,금 14시)','덕진동치매안심마을 운영위원회의참석(수 15시)','선배시민 권역 간담회 참석(목, 16시)','월드컵 단체 시청( 목, 10시)','2분기 신입회원 환영회(금, 10:30)','사회복지현장실습 실시(금, 13:30)'], place:['노년사회화','','문승영(덕진주민센터)','김수희','사랑방','2층 믿음방','3층 두란노']},
+          {group:'노년사회화교육팀', business:'건강관리', plan:['인지향상프로그램(월, 14:00~15:00)','촉탁의 방문진료(수, 13:40~)','낙상예방 프로그램 2회차 참여자 모집'], place:['복종현,윤숙영']},
+          {group:'노년사회화교육팀', business:'작은도서관', plan:['상반기 문화시설 이용자현황 제출(시립)','전북·전주 작은도서관 운영협의회 회비 납부'], place:['형이삭']},
+          {group:'지역복지팀', business:'노인일자리', plan:['공원관리, 복지시설 사업단 활동물품 구입(주중)','초록정원관리사 혹서기 교육 사업계획서 작성(주중)','시니어 한끼 지원사업 참여자 만족도 조사서 제출(주중)','국민연금 수급자 공감여행 결과 및 정산보고 제출(주중)'], place:['노인일자리','','허혜경, 이혜수','김효진']},
+          {group:'지역복지팀', business:'사례관리 및\n지역사회돌봄', plan:['노인자원봉사활성화 지원사업 6월 결과보고(주중)','함께헤어 봉사단 무료 이미용 진행(화, 09:30~11:30)','함께헤어 봉사단 이미용 봉사 협약식(화, 09:30)','희망여름 착착착 준비(주중)','사례관리 및 자원봉사자 관리(주중)'], place:['정인석']},
+          {group:'지역복지팀', business:'노인복지관\n연계프로그램', plan:['경로당 파견 프로그램모니터링 및 강의일지 확인(주중)','경로당 영양쿠킹클래스 1회기 진행\n   (송천사랑 24일, 수, 14시)'], place:['조혜숙']},
+          {group:'지역복지팀', business:'기획홍보 및\n지역복지총괄', plan:['금암노인복지관 25주년 행사 참가(목, 10:00)','선배시민 전주권역 간담회 참석 (목, 16:00~)','늘푸른합창단 개정면행정복지센터 공연(금, 9시10분~)','복지관홍보(주중)'], place:['중부비전센터,카페토브']},
+          {group:'', business:'토', plan:['김수희, 문승영, 정인석'], place:[]},
+          {group:'', business:'기타', plan:['휴가: 김수희(화), 문승영(화,오후), 형이삭(수)'], place:[]}
+        ]},
+        { id:'p2', title:'총무팀, 영양팀, 아중노인복지관', approval:['','',''], rows:[
+          {group:'총무팀', business:'서무·회계', plan:['6월 직원 급여 및 퇴직금 이체(6/25)','2분기 운영위원회 관련 회계 서류 작성(~6/24)','상반기 연차사용촉진 관련서류 작성'], place:['임미정, 최혜림']},
+          {group:'총무팀', business:'시설관리', plan:['안전훈련 및 소방훈련(6/22)','복지관 3층 복도 청소(6/26)','사회복무요원 복무예정자 인수(6/26)','전기 설비 정기 점검'], place:['최정환']},
+          {group:'영양팀', business:'경로식당', plan:['경로당 쿠킹클래스 1회기 (송천사랑,오이피클)','3분기 생신잔치','조리종사자 주휴수당 및 급여기안작성'], place:['이경님,이기순']},
+          {group:'아중노인복지관', business:'노년사회화\n분관총괄', plan:['깨끗한 세상 소득 2차(화)','집단상담 다시 피어나는 청춘 5회기 종결(수, 10시)','집단상담 프로그램 포토북 제작(주중)','분관 운영위원회 및 1차 추경예산 자료 작성(주중)','FIFA 북중미 월드컵 대한민국 대표팀 단체 시청(목, 10시)'], place:['엄라영 최유리']},
+          {group:'아중노인복지관', business:'경로식당', plan:['조리종사자 급여 주휴수당 기안작성','상반기 생신잔치 실시(목)','6.26 대체식 포장 및 제공'], place:['윤재희','윤재희, 강정미','윤재희, 강정미']},
+          {group:'아중노인복지관', business:'토당직(아중)', plan:['윤재희'], place:[]},
+          {group:'아중노인복지관', business:'휴가', plan:['엄라영(화, 오후 2h), 강정미(금)'], place:[]},
+          {group:'(노·지·총·영)', business:'부장', plan:['운영위원회 자료 취합 및 정리(주중)','늘푸른합창단 개정면 공연 버스지원(금 09:10)','복지관업무 총괄(후원,후백제교육관련준비,실습)'], place:['개정면행정복지센터']},
+          {group:'', business:'사무국장', plan:['전주연탄은행 밥차 검사 지원(월)','금암노인복지관 25주년 행사 참가(목, 10:00)','3층 돌돌이 바닥청소(금. 14:00)','지역사회 버스지원(토)','직원 업무관리 및 사업주훈련 준비'], place:['국장','관장,국장,부장,김팀장','국장','국장','국장']}
+        ]}
+      ]
     }
-    return groups;
   }
-  function tbl(list){
-    const body=groupRows(list).map(g=>g.rows.map((r,i)=>`<tr>${i===0?`<td class="group" rowspan="${g.rows.length}">${cellText(g.section)}</td>`:''}<td class="business">${cellText(r.business)}</td><td class="plan">${cellText(r.plan)}</td><td class="owner">${cellText(r.ownerPlace)}</td></tr>`).join('')).join('');
-    return `<table class="wk-table"><thead><tr><th>구분</th><th>사 업</th><th>업&nbsp;&nbsp;&nbsp;&nbsp;무&nbsp;&nbsp;&nbsp;&nbsp;계&nbsp;&nbsp;&nbsp;&nbsp;획</th><th>담당자 및 장소</th></tr></thead><tbody>${body}</tbody></table>`;
-  }
-  function page(title,arr,idx){return `<section class="weekly-sheet page-${idx}"><div class="wk-head"><h1>주&nbsp;&nbsp;&nbsp;간&nbsp;&nbsp;&nbsp;계&nbsp;&nbsp;&nbsp;획</h1>${approval()}</div><div class="wk-sub"><span>${htmlEscape(title)}</span><span>${htmlEscape(weekLabel(scope))}</span></div>${tbl(arr)}</section>`;}
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${htmlEscape(scope)} 주간계획 PDF</title><style>
-@page{size:A4 portrait;margin:0}
-*{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#dfe3e8;font-family:'Batang','바탕','Malgun Gothic','맑은 고딕',serif;color:#000}.no-print{position:fixed;top:10px;left:10px;z-index:10;background:#111827;color:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,.25);font-family:'Malgun Gothic','맑은 고딕',sans-serif}.no-print button{font-size:14px;padding:7px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff}.no-print span{font-size:12px;margin-left:8px;opacity:.85}.weekly-print{padding:10mm 0}.weekly-sheet{position:relative;width:210mm;height:297mm;margin:0 auto 10mm;background:#fff;padding:11mm 13mm 8mm 13mm;page-break-after:always;break-after:page;overflow:hidden}.weekly-sheet:last-child{page-break-after:auto;break-after:auto}.wk-head{height:36mm;position:relative}.wk-head h1{text-align:center;font-size:24pt;font-weight:700;letter-spacing:13mm;margin:0;padding:0 0 0 16mm;line-height:1.1}.wk-approval{position:absolute;right:0;top:0;border-collapse:collapse;border:2px solid #000;background:#fff}.wk-approval th,.wk-approval td{border:1px solid #000;text-align:center;width:18mm;font-size:10.5pt;font-weight:700;padding:0}.wk-approval th{height:8mm}.wk-approval td{height:20mm}.wk-approval .approval-title{width:9.5mm;line-height:1.25;font-size:10.5pt}.wk-sub{display:flex;justify-content:space-between;align-items:flex-end;font-size:12.5pt;margin:0 0 2mm 0;padding:0 0 0 3mm}.wk-sub span:last-child{font-size:12.5pt;padding-right:1mm}.wk-table{width:100%;border-collapse:collapse;table-layout:fixed;border:2px solid #000;font-size:10.5pt}.wk-table th,.wk-table td{border:1px solid #000;vertical-align:middle;white-space:pre-wrap;word-break:keep-all;overflow-wrap:break-word}.wk-table th{text-align:center;font-size:12pt;font-weight:700;height:9mm;padding:0 1mm;letter-spacing:1px}.wk-table th:nth-child(1){width:7.2%}.wk-table th:nth-child(2){width:14.0%}.wk-table th:nth-child(3){width:60.2%}.wk-table th:nth-child(4){width:18.6%}.wk-table td{padding:1.5mm 2mm;line-height:1.38}.wk-table td.group{text-align:center;font-weight:700;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:2px;font-size:11pt;line-height:1.15;padding:.5mm}.wk-table td.business{text-align:center;font-weight:700;font-size:10.7pt;padding:1mm}.wk-table td.plan{font-size:10.45pt}.wk-table td.owner{font-size:10.1pt}.page-1 .wk-table td{line-height:1.38}.page-2 .wk-table td{line-height:1.32}.page-2 .wk-table td.plan{font-size:10.05pt}.page-2 .wk-table td.owner{font-size:9.65pt}@media screen{.weekly-sheet{box-shadow:0 0 0 1px #d1d5db,0 12px 35px rgba(0,0,0,.16)}}@media print{body{background:#fff}.no-print{display:none}.weekly-print{padding:0}.weekly-sheet{margin:0;width:210mm;height:297mm;box-shadow:none}}
-</style></head><body><div class="no-print"><button onclick="window.print()">PDF로 저장/인쇄</button><span>A4 세로, 각 묶음 1쪽씩 출력됩니다.</span></div><div class="weekly-print">${page('노년사회화팀, 지역복지팀',first,1)}${page('총무팀, 영양팀, 아중노인복지관',second,2)}</div><script>setTimeout(()=>window.print(),450)</script></body></html>`;
+});
+function load(){ try{ return JSON.parse(fs.readFileSync(DATA_FILE,'utf8')); } catch(e){ const d=seed(); save(d); return d; } }
+function save(data){ fs.mkdirSync(DATA_DIR,{recursive:true}); fs.writeFileSync(DATA_FILE, JSON.stringify(data,null,2)); }
+let db = load();
+let clients = new Set();
+function broadcast(){ const payload = `data: ${JSON.stringify({type:'update', ts:Date.now()})}\n\n`; clients.forEach(res=>{ try{res.write(payload);}catch(e){} }); }
+function send(res, status, body, type='application/json; charset=utf-8'){ res.writeHead(status, {'Content-Type':type, 'Cache-Control':'no-store'}); res.end(body); }
+function parseBody(req){ return new Promise(resolve=>{ let b=''; req.on('data',c=>b+=c); req.on('end',()=>{try{resolve(JSON.parse(b||'{}'))}catch(e){resolve({})}}); }); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+function arr(v){ return Array.isArray(v) ? v : String(v||'').split('\n').filter(x=>x.trim()!==''); }
+function monthKey(d=new Date()){ return d.toISOString().slice(0,7); }
+function uid(){ return crypto.randomBytes(8).toString('hex'); }
+function minutes(start,end,br){ if(!start||!end) return 0; let [sh,sm]=start.split(':').map(Number), [eh,em]=end.split(':').map(Number); let a=sh*60+sm,b=eh*60+em; if(b<a) b+=1440; return Math.max(0,b-a-(Number(br)||0)); }
+
+const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml'};
+
+function weeklyRowsWithSpan(rows){
+  const counts={}; rows.forEach(r=>{ if(r.group) counts[r.group]=(counts[r.group]||0)+1; });
+  const seen={};
+  return rows.map(r=>{ const show = r.group && !seen[r.group]; if(r.group) seen[r.group]=true; return {...r, showGroup:show, groupSpan:show?counts[r.group]:0}; });
+}
+function weeklyPageHTML(page, start, end){
+  const rows = weeklyRowsWithSpan(page.rows);
+  return `<section class="weekly-page">
+    <header class="weekly-head">
+      <h1>주&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;간&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;계&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;획</h1>
+      <table class="approval"><tr><td rowspan="2" class="approval-label">결<br>재</td><th>담&nbsp;당</th><th>부&nbsp;장</th></tr><tr><td>${esc(page.approval?.[0]||'')}</td><td>${esc(page.approval?.[1]||'')}</td></tr></table>
+    </header>
+    <div class="weekly-meta"><span>${esc(page.title)}</span><span>${formatPeriod(start,end)}</span></div>
+    <table class="weekly-table">
+      <colgroup><col class="c-group"><col class="c-biz"><col class="c-plan"><col class="c-place"></colgroup>
+      <thead><tr><th>구분</th><th>사&nbsp;&nbsp;업</th><th>업&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;무&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;계&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;획</th><th>담당자 및 장소</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr class="row-lines-${Math.max(arr(r.plan).length, arr(r.place).length)}">
+        ${r.showGroup?`<td class="vgroup" rowspan="${r.groupSpan}">${esc(r.group).split('').join('<br>')}</td>`:''}
+        ${!r.group?`<td class="vgroup blank"></td>`:''}
+        <td class="biz">${esc(r.business).replace(/\n/g,'<br>')}</td>
+        <td class="plan">${arr(r.plan).map(x=>`<div>-&nbsp;${esc(x)}</div>`).join('')}</td>
+        <td class="place">${arr(r.place).map(x=>`<div>-&nbsp;${esc(x)}</div>`).join('')}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </section>`;
+}
+function formatPeriod(s,e){
+  const ds=new Date(s+'T00:00:00'), de=new Date(e+'T00:00:00');
+  return `${ds.getFullYear()}년 ${ds.getMonth()+1}월 ${ds.getDate()}일 ~ ${de.getMonth()+1}월 ${de.getDate()}일`;
+}
+function weeklyPrintHTML(scope){
+  const w = db.weekly[scope] || db.weekly['2026-06-22'];
+  return `<!doctype html><html><head><meta charset="utf-8"><title>주간계획</title><link rel="stylesheet" href="/weekly-print.css"></head><body>
+  <div class="printbar"><button onclick="window.print()">PDF로 저장/인쇄</button><span>각 페이지가 A4 세로 1장씩 출력됩니다.</span></div>
+  ${w.pages.map(p=>weeklyPageHTML(p,w.start,w.end)).join('')}
+  </body></html>`;
 }
 
-
-function sendFile(res, filePath, contentType, downloadName, inline=false){
-  fs.readFile(filePath,(err,buf)=>{
-    if(err){res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});return res.end('template not found');}
-    const disposition = inline ? 'inline' : 'attachment';
-    res.writeHead(200,{
-      'Content-Type': contentType,
-      'Content-Length': buf.length,
-      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
-      'Cache-Control':'no-store'
-    });
-    res.end(buf);
-  });
+// Minimal XLSX writer (valid .xlsx, no npm). Focused on styled exports.
+function crc32(buf){ let table=crc32.table||(crc32.table=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;return c>>>0;})); let c=0xffffffff; for(const b of buf)c=table[(c^b)&255]^(c>>>8); return (c^0xffffffff)>>>0; }
+function zip(files){ let chunks=[], central=[], off=0; const w16=n=>{let b=Buffer.alloc(2);b.writeUInt16LE(n);return b}, w32=n=>{let b=Buffer.alloc(4);b.writeUInt32LE(n>>>0);return b}; for(const f of files){ const name=Buffer.from(f.name); const data=Buffer.isBuffer(f.data)?f.data:Buffer.from(f.data); const crc=crc32(data); const local=Buffer.concat([w32(0x04034b50),w16(20),w16(0),w16(0),w16(0),w16(0),w32(crc),w32(data.length),w32(data.length),w16(name.length),w16(0),name]); chunks.push(local,data); central.push(Buffer.concat([w32(0x02014b50),w16(20),w16(20),w16(0),w16(0),w16(0),w16(0),w32(crc),w32(data.length),w32(data.length),w16(name.length),w16(0),w16(0),w16(0),w16(0),w32(0),w32(off),name])); off += local.length + data.length; } const cstart=off; const cbuf=Buffer.concat(central); const end=Buffer.concat([w32(0x06054b50),w16(0),w16(0),w16(files.length),w16(files.length),w32(cbuf.length),w32(cstart),w16(0)]); return Buffer.concat([...chunks,cbuf,end]); }
+function col(n){ let s=''; while(n){ let m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+function cell(v,r,c,s=1){ const ref=col(c)+r; if(typeof v==='number') return `<c r="${ref}" s="${s}"><v>${v}</v></c>`; return `<c r="${ref}" s="${s}" t="inlineStr"><is><t>${esc(v)}</t></is></c>`; }
+function sheetXML(rows, merges=[], widths=[]){
+  const cols = widths.length?`<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`:'';
+  const sheetData = `<sheetData>${rows.map((r,ri)=>`<row r="${ri+1}" ht="${r.h||18}" customHeight="1">${r.cells.map((cv,ci)=>cv?cell(cv.v,ri+1,ci+1,cv.s||1):'').join('')}</row>`).join('')}</sheetData>`;
+  const mergeXml = merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:'';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}${sheetData}${mergeXml}<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="portrait" paperSize="9" fitToWidth="1" fitToHeight="0"/></worksheet>`;
 }
+function xlsxBuffer(sheetName, rows, merges, widths){
+ const files=[
+ {name:'[Content_Types].xml',data:`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
+ {name:'_rels/.rels',data:`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+ {name:'xl/_rels/workbook.xml.rels',data:`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+ {name:'xl/workbook.xml',data:`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${esc(sheetName).slice(0,31)}" sheetId="1" r:id="rId1"/></sheets></workbook>`},
+ {name:'xl/styles.xml',data:`<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="18"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font><font><sz val="10"/><name val="맑은 고딕"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF3FA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border><border><left style="medium"/><right style="medium"/><top style="medium"/><bottom style="medium"/><diagonal/></border></borders><cellXfs count="8"><xf fontId="0" fillId="0" borderId="0"/><xf fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="1" fillId="0" borderId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="2" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="2" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="3" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="2" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="2" fillId="0" borderId="2" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>`},
+ {name:'xl/worksheets/sheet1.xml',data:sheetXML(rows,merges,widths)}
+ ]; return zip(files);
+}
+function overtimeXlsx(month){ const rows=[{h:28,cells:[{v:'시간외근무 개인 일정표',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:[{v:'소속',s:3},{v:'성명',s:3},{v:'근무일',s:3},{v:'시작',s:3},{v:'종료',s:3},{v:'휴게',s:3},{v:'시간',s:3},{v:'내용',s:3},{v:'비고',s:3}]}]; const data=(db.overtime[month]||[]).sort((a,b)=>(a.workDate||'').localeCompare(b.workDate||'')); data.forEach(r=>rows.push({h:35,cells:[{v:r.department,s:1},{v:r.name,s:1},{v:r.workDate,s:1},{v:r.startTime,s:1},{v:r.endTime,s:1},{v:r.breakMinutes||0,s:1},{v:(minutes(r.startTime,r.endTime,r.breakMinutes)/60).toFixed(1),s:1},{v:r.reason,s:5},{v:r.note,s:5}]})); return xlsxBuffer('시간외근무',rows,['A1:I1'],[12,12,14,10,10,8,8,35,20]); }
+function cardXlsx(month){ const rows=[{h:28,cells:[{v:'신용·체크카드 사용내역',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:['사용일','구분','카드명','사용처','사용내역','금액','계정과목','증빙','비고'].map(v=>({v,s:3}))}]; (db.cards[month]||[]).forEach(r=>rows.push({h:30,cells:[{v:r.date,s:1},{v:r.type,s:1},{v:r.card,s:1},{v:r.vendor,s:1},{v:r.detail,s:5},{v:Number(r.amount)||0,s:1},{v:r.account,s:1},{v:r.proof,s:1},{v:r.note,s:5}]})); return xlsxBuffer('카드사용내역',rows,['A1:I1'],[12,12,16,20,35,12,16,14,20]); }
+function vehicleXlsx(month){ const rows=[{h:28,cells:[{v:'차량일지',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:['사용일','차량','운전자','행선지','사용목적','출발','복귀','출발km','도착km','운행km','주유량','비고'].map(v=>({v,s:3}))}]; (db.vehicle[month]||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>rows.push({h:30,cells:[{v:r.date,s:1},{v:r.car,s:1},{v:r.driver,s:1},{v:r.dest,s:1},{v:r.purpose,s:5},{v:r.startTime,s:1},{v:r.endTime,s:1},{v:Number(r.startKm)||0,s:1},{v:Number(r.endKm)||0,s:1},{v:(Number(r.endKm)||0)-(Number(r.startKm)||0),s:1},{v:r.fuel,s:1},{v:r.note,s:5}]})); return xlsxBuffer('차량일지',rows,['A1:L1'],[12,12,12,18,30,10,10,10,10,10,10,20]); }
 
-const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
-function serveStatic(req,res,pathname){let file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));const fp=path.resolve(PUBLIC_DIR,file);if(!fp.startsWith(PUBLIC_DIR)){res.writeHead(403);return res.end('Forbidden')}fs.readFile(fp,(err,buf)=>{if(err){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'Content-Type':mime[path.extname(fp)]||'application/octet-stream','Cache-Control':'no-store'});res.end(buf);});}
-const server=http.createServer(async(req,res)=>{const u=new URL(req.url,`http://${req.headers.host}`);try{if(req.method==='GET'&&u.pathname==='/api/events'){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.write(`data: ${JSON.stringify({type:'data',data})}\n\n`);clients.add(res);req.on('close',()=>clients.delete(res));return;} if(req.method==='GET'&&u.pathname==='/api/data')return json(res,200,data); if(req.method==='POST'&&u.pathname==='/api/upsert'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:true,row:upsert(body.type,body.scope,body.row||{})});} if(req.method==='POST'&&u.pathname==='/api/delete'){const body=JSON.parse(await readBody(req)||'{}');return json(res,200,{ok:remove(body.type,body.scope,body.id)});} if(req.method==='GET'&&u.pathname==='/print/weekly'){const scope=u.searchParams.get('scope')||weekStartISO();if(scope==='2026-06-22')return sendFile(res,path.join(TEMPLATE_DIR,'weekly_2026-06-22.pdf'),'application/pdf',`${scope}_주간계획.pdf`,true);const body=Buffer.from(weeklyPrintHtml(scope),'utf8');res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Length':body.length});return res.end(body);} if(req.method==='GET'&&u.pathname.startsWith('/api/export/')){const type=u.pathname.split('/').pop();const scope=u.searchParams.get('scope')||todayMonth();const mode=u.searchParams.get('mode')||'schedule';let buf,name;if(type==='overtime'){if(mode==='confirm')return sendFile(res,path.join(TEMPLATE_DIR,'overtime_confirm_original.xlsx'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`${scope}_개인시간외근무확인표_원본서식.xlsx`);return sendFile(res,path.join(TEMPLATE_DIR,'overtime_schedule_original.xlsx'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`${scope}_시간외근무개인세부내역_원본서식.xlsx`);} else if(type==='vehicle'){buf=xlsxVehicle(scope);name=`${scope}_차량운행일지.xlsx`;} else if(type==='card'){buf=xlsxCard(scope);name=`${scope}_신용체크카드사용내역.xlsx`;} else return json(res,404,{error:'unknown export'});return sendXlsx(res,sanitizeName(name),buf);} if(req.method==='GET')return serveStatic(req,res,u.pathname);json(res,405,{error:'method not allowed'});}catch(err){console.error(err);json(res,500,{error:String(err.message||err)});}});
-server.listen(PORT,'0.0.0.0',()=>console.log(`shared-worktables v8 template-first listening on ${PORT}`));
+const server = http.createServer(async (req,res)=>{
+  const parsed=url.parse(req.url,true); const p=decodeURIComponent(parsed.pathname);
+  if(p==='/events'){ res.writeHead(200, {'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive'}); res.write(`data: ${JSON.stringify({type:'hello'})}\n\n`); clients.add(res); req.on('close',()=>clients.delete(res)); return; }
+  if(p==='/api/data') return send(res,200,JSON.stringify(db));
+  if(p==='/api/save' && req.method==='POST'){ const body=await parseBody(req); db=body; save(db); broadcast(); return send(res,200,JSON.stringify({ok:true})); }
+  if(p==='/api/add' && req.method==='POST'){ const {type,scope}=await parseBody(req); if(type==='overtime'){ db.overtime[scope]=db.overtime[scope]||[]; db.overtime[scope].push({id:uid(),department:'',name:'',workDate:scope+'-01',startTime:'18:00',endTime:'20:00',breakMinutes:0,reason:'',note:''}); } if(type==='vehicle'){ db.vehicle[scope]=db.vehicle[scope]||[]; db.vehicle[scope].push({id:uid(),date:scope+'-01',car:'',driver:'',dest:'',purpose:'',startTime:'',endTime:'',startKm:'',endKm:'',fuel:'',note:''}); } if(type==='cards'){ db.cards[scope]=db.cards[scope]||[]; db.cards[scope].push({id:uid(),date:scope+'-01',type:'보조금',card:'',vendor:'',detail:'',amount:'',account:'',proof:'',note:''}); } save(db); broadcast(); return send(res,200,JSON.stringify({ok:true})); }
+  if(p==='/print/weekly') return send(res,200,weeklyPrintHTML(parsed.query.scope||'2026-06-22'),'text/html; charset=utf-8');
+  if(p==='/download/overtime.xlsx'){ const m=parsed.query.month||monthKey(); res.writeHead(200, {'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="overtime_${m}.xlsx"`}); return res.end(overtimeXlsx(m)); }
+  if(p==='/download/cards.xlsx'){ const m=parsed.query.month||monthKey(); res.writeHead(200, {'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="cards_${m}.xlsx"`}); return res.end(cardXlsx(m)); }
+  if(p==='/download/vehicle.xlsx'){ const m=parsed.query.month||monthKey(); res.writeHead(200, {'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="vehicle_${m}.xlsx"`}); return res.end(vehicleXlsx(m)); }
+  let file=p==='/'?'/index.html':p; let full=path.join(PUBLIC_DIR,file); if(!full.startsWith(PUBLIC_DIR)) return send(res,403,'forbidden','text/plain'); fs.readFile(full,(err,data)=>{ if(err) return send(res,404,'not found','text/plain'); send(res,200,data,mime[path.extname(full)]||'application/octet-stream'); });
+});
+server.listen(PORT,'0.0.0.0',()=>console.log(`Server running on ${PORT}`));
