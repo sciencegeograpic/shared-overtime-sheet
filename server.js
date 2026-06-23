@@ -47,6 +47,22 @@ const seed = () => ({
 function load(){ try{ return JSON.parse(fs.readFileSync(DATA_FILE,'utf8')); } catch(e){ const d=seed(); save(d); return d; } }
 function save(data){ fs.mkdirSync(DATA_DIR,{recursive:true}); fs.writeFileSync(DATA_FILE, JSON.stringify(data,null,2)); }
 let db = load();
+
+function ensureSchema(data){
+  const base = seed();
+  data = data && typeof data === 'object' ? data : {};
+  data.overtime = data.overtime && typeof data.overtime === 'object' ? data.overtime : {};
+  data.vehicle = data.vehicle && typeof data.vehicle === 'object' ? data.vehicle : {};
+  data.cards = data.cards && typeof data.cards === 'object' ? data.cards : {};
+  data.weekly = data.weekly && typeof data.weekly === 'object' ? data.weekly : {};
+  Object.keys(base.weekly).forEach(k=>{
+    if(!data.weekly[k] || !Array.isArray(data.weekly[k].pages)) data.weekly[k] = base.weekly[k];
+  });
+  return data;
+}
+db = ensureSchema(db);
+save(db);
+
 let clients = new Set();
 function broadcast(){ const payload = `data: ${JSON.stringify({type:'update', ts:Date.now()})}\n\n`; clients.forEach(res=>{ try{res.write(payload);}catch(e){} }); }
 function send(res, status, body, type='application/json; charset=utf-8'){ res.writeHead(status, {'Content-Type':type, 'Cache-Control':'no-store'}); res.end(body); }
@@ -90,7 +106,8 @@ function formatPeriod(s,e){
   return `${ds.getFullYear()}년 ${ds.getMonth()+1}월 ${ds.getDate()}일 ~ ${de.getMonth()+1}월 ${de.getDate()}일`;
 }
 function weeklyPrintHTML(scope){
-  const w = db.weekly[scope] || db.weekly['2026-06-22'];
+  db = ensureSchema(db);
+  const w = (db.weekly && db.weekly[scope] && Array.isArray(db.weekly[scope].pages)) ? db.weekly[scope] : db.weekly['2026-06-22'];
   return `<!doctype html><html><head><meta charset="utf-8"><title>주간계획</title><link rel="stylesheet" href="/weekly-print.css"></head><body>
   <div class="printbar"><button onclick="window.print()">PDF로 저장/인쇄</button><span>각 페이지가 A4 세로 1장씩 출력됩니다.</span></div>
   ${w.pages.map(p=>weeklyPageHTML(p,w.start,w.end)).join('')}
@@ -118,9 +135,9 @@ function xlsxBuffer(sheetName, rows, merges, widths){
  {name:'xl/worksheets/sheet1.xml',data:sheetXML(rows,merges,widths)}
  ]; return zip(files);
 }
-function overtimeXlsx(month){ const rows=[{h:28,cells:[{v:'시간외근무 개인 일정표',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:[{v:'소속',s:3},{v:'성명',s:3},{v:'근무일',s:3},{v:'시작',s:3},{v:'종료',s:3},{v:'휴게',s:3},{v:'시간',s:3},{v:'내용',s:3},{v:'비고',s:3}]}]; const data=(db.overtime[month]||[]).sort((a,b)=>(a.workDate||'').localeCompare(b.workDate||'')); data.forEach(r=>rows.push({h:35,cells:[{v:r.department,s:1},{v:r.name,s:1},{v:r.workDate,s:1},{v:r.startTime,s:1},{v:r.endTime,s:1},{v:r.breakMinutes||0,s:1},{v:(minutes(r.startTime,r.endTime,r.breakMinutes)/60).toFixed(1),s:1},{v:r.reason,s:5},{v:r.note,s:5}]})); return xlsxBuffer('시간외근무',rows,['A1:I1'],[12,12,14,10,10,8,8,35,20]); }
-function cardXlsx(month){ const rows=[{h:28,cells:[{v:'신용·체크카드 사용내역',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:['사용일','구분','카드명','사용처','사용내역','금액','계정과목','증빙','비고'].map(v=>({v,s:3}))}]; (db.cards[month]||[]).forEach(r=>rows.push({h:30,cells:[{v:r.date,s:1},{v:r.type,s:1},{v:r.card,s:1},{v:r.vendor,s:1},{v:r.detail,s:5},{v:Number(r.amount)||0,s:1},{v:r.account,s:1},{v:r.proof,s:1},{v:r.note,s:5}]})); return xlsxBuffer('카드사용내역',rows,['A1:I1'],[12,12,16,20,35,12,16,14,20]); }
-function vehicleXlsx(month){ const rows=[{h:28,cells:[{v:'차량일지',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:['사용일','차량','운전자','행선지','사용목적','출발','복귀','출발km','도착km','운행km','주유량','비고'].map(v=>({v,s:3}))}]; (db.vehicle[month]||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>rows.push({h:30,cells:[{v:r.date,s:1},{v:r.car,s:1},{v:r.driver,s:1},{v:r.dest,s:1},{v:r.purpose,s:5},{v:r.startTime,s:1},{v:r.endTime,s:1},{v:Number(r.startKm)||0,s:1},{v:Number(r.endKm)||0,s:1},{v:(Number(r.endKm)||0)-(Number(r.startKm)||0),s:1},{v:r.fuel,s:1},{v:r.note,s:5}]})); return xlsxBuffer('차량일지',rows,['A1:L1'],[12,12,12,18,30,10,10,10,10,10,10,20]); }
+function overtimeXlsx(month){ db=ensureSchema(db); const rows=[{h:28,cells:[{v:'시간외근무 개인 일정표',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:[{v:'소속',s:3},{v:'성명',s:3},{v:'근무일',s:3},{v:'시작',s:3},{v:'종료',s:3},{v:'휴게',s:3},{v:'시간',s:3},{v:'내용',s:3},{v:'비고',s:3}]}]; const data=(db.overtime[month]||[]).sort((a,b)=>(a.workDate||'').localeCompare(b.workDate||'')); data.forEach(r=>rows.push({h:35,cells:[{v:r.department,s:1},{v:r.name,s:1},{v:r.workDate,s:1},{v:r.startTime,s:1},{v:r.endTime,s:1},{v:r.breakMinutes||0,s:1},{v:(minutes(r.startTime,r.endTime,r.breakMinutes)/60).toFixed(1),s:1},{v:r.reason,s:5},{v:r.note,s:5}]})); return xlsxBuffer('시간외근무',rows,['A1:I1'],[12,12,14,10,10,8,8,35,20]); }
+function cardXlsx(month){ db=ensureSchema(db); const rows=[{h:28,cells:[{v:'신용·체크카드 사용내역',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:['사용일','구분','카드명','사용처','사용내역','금액','계정과목','증빙','비고'].map(v=>({v,s:3}))}]; (db.cards[month]||[]).forEach(r=>rows.push({h:30,cells:[{v:r.date,s:1},{v:r.type,s:1},{v:r.card,s:1},{v:r.vendor,s:1},{v:r.detail,s:5},{v:Number(r.amount)||0,s:1},{v:r.account,s:1},{v:r.proof,s:1},{v:r.note,s:5}]})); return xlsxBuffer('카드사용내역',rows,['A1:I1'],[12,12,16,20,35,12,16,14,20]); }
+function vehicleXlsx(month){ db=ensureSchema(db); const rows=[{h:28,cells:[{v:'차량일지',s:2}]},{h:22,cells:[{v:`${month}`,s:0}]},{h:24,cells:['사용일','차량','운전자','행선지','사용목적','출발','복귀','출발km','도착km','운행km','주유량','비고'].map(v=>({v,s:3}))}]; (db.vehicle[month]||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>rows.push({h:30,cells:[{v:r.date,s:1},{v:r.car,s:1},{v:r.driver,s:1},{v:r.dest,s:1},{v:r.purpose,s:5},{v:r.startTime,s:1},{v:r.endTime,s:1},{v:Number(r.startKm)||0,s:1},{v:Number(r.endKm)||0,s:1},{v:(Number(r.endKm)||0)-(Number(r.startKm)||0),s:1},{v:r.fuel,s:1},{v:r.note,s:5}]})); return xlsxBuffer('차량일지',rows,['A1:L1'],[12,12,12,18,30,10,10,10,10,10,10,20]); }
 
 const server = http.createServer(async (req,res)=>{
   const parsed=url.parse(req.url,true); const p=decodeURIComponent(parsed.pathname);
