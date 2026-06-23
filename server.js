@@ -84,7 +84,7 @@ function weeklyPageHTML(page, start, end){
   const rows = weeklyRowsWithSpan(page.rows);
   return `<section class="weekly-page">
     <header class="weekly-head">
-      <h1>주&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;간&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;계&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;획</h1>
+      <h1><span>주</span><span>간</span><span>계</span><span>획</span></h1>
       <table class="approval"><tr><td rowspan="2" class="approval-label">결<br>재</td><th>담&nbsp;당</th><th>부&nbsp;장</th></tr><tr><td>${esc(page.approval?.[0]||'')}</td><td>${esc(page.approval?.[1]||'')}</td></tr></table>
     </header>
     <div class="weekly-meta"><span>${esc(page.title)}</span><span>${formatPeriod(start,end)}</span></div>

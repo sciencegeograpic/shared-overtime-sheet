@@ -1,6 +1,6 @@
 {
   "name": "shared-overtime-sheet",
-  "version": "9.0.0",
+  "version": "9.2.0",
   "description": "서식 우선 공동 업무표 v9 - dependency free",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
